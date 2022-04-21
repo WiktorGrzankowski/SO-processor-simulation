@@ -115,16 +115,6 @@ set_Z_register:
     mov [r14 + 7], al
     ret
 
-; set C register to 1 if carry flag is set
-; set C register to 0 otherwise
-; C register is at [r14 + 6]
-set_C_register:
-    ; mov al, 0
-    ; mov [r14 + 6], al
-    ; adc [r14 + 6], al   ; will add 0 if CF is 0, otherwise will ad 1
-    ret
-
-
 OR:
     mov r15b, [rel arg1]
     mov r13b, [rel arg2]
@@ -316,22 +306,81 @@ XORI:
     cmp r15b, 3
     jle .arg1_is_a_register
     call set_arg_1_to_memory_address
+
     xor [rsi + r9], r13b
     mov al, [rsi + r9]
+
     call set_Z_register
     jmp decode_and_perform_instruction.finish
 
 .arg1_is_a_register:
     movsx r15, r15b
-    mov [r14 + r15], r13b
+
+    xor [r14 + r15], r13b
     mov al, [r14 + r15]
+
     call set_Z_register
     jmp decode_and_perform_instruction.finish
 
+ADDI:
+    mov r15b, [rel arg1]
+    mov r13b, [rel imm8]    ; r13b is an immediate
+
+    cmp r15b, 3
+    jle .arg1_is_a_register
+                            ; arg1 is a memory address
+    call set_arg_1_to_memory_address
+    add [rsi + r9], r13b    ; add imm8 to given memory address
+    mov al, [rsi + r9]      ; to set Z register
+    call set_Z_register
+    jmp decode_and_perform_instruction.finish
+
+.arg1_is_a_register:
+    movsx r15, r15b
+    add [r14 + r15], r13b   ; add imm8 to given memory address
+    mov al, [r14 + r15]     ; to set Z register
+    call set_Z_register
+    jmp decode_and_perform_instruction.finish
+
+; Odejmuje wartość imm8 od arg1, ale nie zapisuje wyniku. Ustawia znaczniki C i Z zgodnie z wynikiem operacji.
+CMPI:
+    mov r15b, [rel arg1]
+    mov r13b, [rel imm8]    ; r13b is an immediate
+
+    cmp r15b, 3
+    jle .arg1_is_a_register
+                            ; arg1 is a memory address
+    call set_arg_1_to_memory_address
+    mov [r14 + 7], byte 0   ; Z register's value will be now set to 1 if comparison resultet in 0
+    mov [r14 + 6], byte 0   ; C register can now be forgotten and will be set now
+
+    cmp [rsi + r9], r13b
+    jnz .set_C
+    inc byte [r14 + 7]      ; will set C to 1 if CF is set, stay 0 otherwise
+
+.arg1_is_a_register:
+    movsx r15, r15b
+    ; cmp arg1, imm8
+    mov [r14 + 7], byte 0   ; Z register's value will be now set to 1 if comparison resultet in 0
+    mov [r14 + 6], byte 0   ; C register can now be forgotten and will be set now
+    cmp [r14 + r15], r13b
+    jnz .set_C
+                            ; result is 0, set Z register
+    inc byte [r14 + 7]      ; set C to 1
+.set_C:
+                            ; Z is set already, now set C correctly 
+    adc [r14 + 6], byte 0   ; will set C to 1 if CF is set, stay 0 otherwise
+
+    jmp decode_and_perform_instruction.finish
+
+; todo
+RCR:
+
+
+    ret
 
 decode_and_perform_instruction:
     mov r12w, [rdi + rbp]
-    ; lea rdi, [rdi + 2]  ; move pointer 
     add rbp, 2
     mov [rel steps], rbp
     shr r12w, 14
@@ -356,17 +405,29 @@ decode_and_perform_instruction:
 
 .other_instruction:
     mov r12w, [rel instruction]
-    shr r12w, 12                    ; look at last 4 bytes
+    shr r12w, 12                    
     cmp r12w, 4
     je MOVI
     cmp r12w, 15
     je BRK
     cmp r12w, 5
     je XORI
-    ; cmp r12b, 6                         ; could be ADDI or CMPI
-    ; je ADDI_or_CMPI
+    cmp r12b, 7
+    je RCR
+    cmp r12b, 6                         ; could be ADDI or CMPI
+    je .ADDI_OR_CMPI
+    cmp r12b, 8
+    je .CLC_OR_STC
 
-
+.ADDI_OR_CMPI:
+    cmp [rel instruction], word 0x6800
+    jl ADDI                             ; instruction value is below 0x6800, so it must be ADDI
+    jmp CMPI
+                                        ; instruction is 0x6XXX and is greater or equal to 0x6800, must be CMPI
+.CLC_OR_STC:
+    cmp [rel instruction], word 0x8000
+    je CLC                              ; instruction is CLC    
+    jmp STC                             ; instruction is 0x8XXX and is not 0x8000, so it must be STC
 
 .finish:
     ret
