@@ -45,12 +45,17 @@ set_arg2_to_memory_address:
     cmp r13b, 6
     jne .check_for_7
     mov r13b, [r14 + 2]     ; get X from state
+
+
     add r13b, [r14 + 1]     ; add D, sum is X + D
+    
+    ; zmiany!
     movsx r9, r13b          ; r9 is now an address, rsi + r9 means [X + D]
     mov r13b, [rsi + r9]
+    ; zmiany
     jmp .finish
 .check_for_7:
-    cmp r13b, 6
+    cmp r13b, 7
     mov r13b, [r14 + 3]     ; get Y from state
     add r13b, [r14 + 1]     ; add D, sum is Y + D
     movsx r9, r13b          ; r9 is now an address, rsi + r9 means [Y + D]
@@ -62,14 +67,14 @@ set_arg2_to_memory_address:
 set_arg2_to_register_value:
     movsx r9, r13b          ; get arg2 value as 64-bits
     mov r13b, [r14 + r9]    ; set value of arg2 with correct register
-    ; mov r13b, 58
     ret
 
 
 set_arg2:
     cmp r13b, 3                     ; check arg2
-    jle .arg2_is_a_register      ; arg2 is a register 
+    jle .arg2_is_a_register         ; arg2 is a register 
     call set_arg2_to_memory_address ; arg2 is a memory address, set r13b accordingly
+    ret
 .arg2_is_a_register:
     call set_arg2_to_register_value ; arg2 is a register
     ret
@@ -94,7 +99,7 @@ set_arg_1_to_memory_address:
     movsx r9, r15b          ; r9 is now an address, rsi + r9 means [X + D]
     jmp .finish
 .check_for_7:
-    cmp r15b, 6
+    cmp r15b, 7
     mov r15b, [r14 + 3]     ; get Y from state
     add r15b, [r14 + 1]     ; add D, sum is Y + D
     movsx r9, r15b          ; r9 is now an address, rsi + r9 means [Y + D]
