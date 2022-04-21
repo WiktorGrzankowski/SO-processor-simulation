@@ -7,12 +7,14 @@ arg1:           resb 1
 arg2:           resb 1
 imm8:           resb 1
 instruction:    resw 1
+steps:          resq 1
 
 section .text
 
 
 decode_parameters:
-    mov r13w, word [rdi + r8 * 2]       ; r13w constains current instruction value
+    ; tu nalezy przesuwac samo [rdi], zeby moc krokowo wykonywac instrukcje
+    mov r13w, word [rdi + rbp]       ; r13w constains current instruction value
     mov [rel instruction], r13w ; save instruction value
     mov [rel imm8], r13b
     shr r13w, 3
@@ -164,10 +166,9 @@ ADD:
     add [r14 + r15], r13b
     jmp decode_and_perform_instruction.finish
 
-; TODO !!!!!!!!!!
-; tutaj jest cos nie tak z ustawianiem C i Z
-; inne funkcje generalnie dzialaja, z tego co widze
-; trzeba spytac Marka jak tu powinno sie to rozkminic
+; nie wiem w którym momencie należy dodać wartość carry flag
+; można albo zrobić arg2 += CF, potem arg1 += arg2
+; ale to chyba nie ma znaczenia 
 ADC:
     mov r15b, [rel arg1]
     mov r13b, [rel arg2]
@@ -185,24 +186,21 @@ ADC:
     add [rsi + r9], r13b
     adc [r14 + 6], al               ; will add 0 if CF is 0, otherwise will ad 1
 
-
     mov al, [rsi + r9]              ; to set Z 
     call set_Z_register
-    ; call set_C_register
     jmp decode_and_perform_instruction.finish
 
 .arg1_is_a_register:
     movsx r15, r15b
 
     mov al, 0           ; to later set C register
-    mov [r14 + 6], al   ; to later set C register, old value cant now be forgotten
+    mov [r14 + 6], al   ; to later set C register, old value can now be forgotten
     
     add [r14 + r15], r13b
     adc [r14 + 6], al   ; will add 0 if CF is 0, otherwise will ad 1
 
     mov al, [r14 + r15]             ; to set Z
     call set_Z_register
-    ; call set_C_register
     jmp decode_and_perform_instruction.finish
 
 
@@ -223,6 +221,43 @@ SUB:
     movsx r15, r15b
     sub [r14 + r15], r13b
     jmp decode_and_perform_instruction.finish
+
+; chyba dziala w porzadku, analogicznie do ADC
+SBB:
+    mov r15b, [rel arg1]
+    mov r13b, [rel arg2]
+    
+    call set_arg2                   ; sets r13b to a correct arg2 value, either of a register or a memory address
+    sub r13b, [r14 + 6]             ; subtract value of C register, now r13b contains correct value
+
+    cmp r15b, 3     
+    jle .arg1_is_a_register
+                                    ; arg1 is a memory address
+    call set_arg_1_to_memory_address ; rsi + r9 is a correct address to write onto
+    
+    mov al, 0
+    mov [r14 + 6], al               ; to later set C register, old value can now be forgotten
+        
+    sub [rsi + r9], r13b            ; main operation
+    sbb [r14 + 6], al               ; will set C register to 1 if CF is set, 0 otherwise
+
+    mov al, [rsi + r9]              ; to set Z
+    call set_Z_register
+    jmp decode_and_perform_instruction.finish
+
+.arg1_is_a_register:
+    movsx r15, r15b
+
+    mov al, 0               ; to later set C register
+    mov [r14 + 6], al       ; to later set C register, old value can now be forgotten
+
+    sub [r14 + r15], r13b
+    adc [r14 + 6], al       ; will set C register to 1 if CF is set, 0 otherwise
+    
+    mov al, [r14 + r15]     ; to set Z
+    call set_Z_register
+    jmp decode_and_perform_instruction.finish
+
 
 MOV:
     mov r15b, [rel arg1]
@@ -264,7 +299,7 @@ BRK:
     jmp decode_and_perform_instruction.finish
 
 CLC:
-    mov r15b, 0     ; value for C value
+    xor r15b, r15b     ; value for C value
     mov [r14 + 6], r15b
     jmp decode_and_perform_instruction.finish
 
@@ -273,6 +308,7 @@ STC:
     mov [r14 + 6], r15b
     jmp decode_and_perform_instruction.finish
 
+; do przetestowania jeszcze
 XORI:
     mov r15b, [rel arg1]
     mov r13b, [rel imm8] ; r13b is an immediate
@@ -294,7 +330,10 @@ XORI:
 
 
 decode_and_perform_instruction:
-    mov r12w, [rdi + r8 * 2] 
+    mov r12w, [rdi + rbp]
+    ; lea rdi, [rdi + 2]  ; move pointer 
+    add rbp, 2
+    mov [rel steps], rbp
     shr r12w, 14
     
     cmp word r12w, 0
@@ -311,6 +350,8 @@ decode_and_perform_instruction:
     je OR
     cmp r12b, 6
     je ADC
+    cmp r12b, 7
+    je SBB
 
 
 .other_instruction:
@@ -339,11 +380,15 @@ so_emul:
     push r13
     push r14
     push r15
+    push rbp
     ; here begins the main loop
     ; we can modify rdx, so that will be the main loop iterator
+    mov rbp, [rel steps]    ; rbp contains the number of instructions performed already
+                            ; important, because code can be performed in steps
+                            ; by calling so_emul multiple times to perform next instructions
     mov r14, state
-    mov r8, 0
-    mov r10, 0              ; r10 contains info about break. 1 means BRK was encountered
+    xor r8, r8
+    xor r10, r10              ; r10 contains info about break. 1 means BRK was encountered
 .instructions_loop:
     inc byte [r14 + 4]       ; increase program counter
     call decode_parameters
@@ -358,6 +403,7 @@ so_emul:
 
 .finish:
     mov rax, [rel state]
+    pop rbp
     pop r15
     pop r14
     pop r13
