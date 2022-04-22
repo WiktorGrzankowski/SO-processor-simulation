@@ -369,7 +369,7 @@ CMPI:
 
     cmp [rsi + r9], r13b
     jnz .set_C
-    inc byte [r14 + 7]      ; will set C to 1 if CF is set, stay 0 otherwise
+    inc byte [r14 + 7]      ; will set Z to 1 if ZF is set, stay 0 otherwise
 
 .arg1_is_a_register:
     movsx r15, r15b
@@ -394,33 +394,63 @@ RCR:
     cmp r15b, 3
     jle .arg1_is_a_register
     call set_arg_1_to_memory_address
-                                ; rsi + r9 now points to correct memory address
-    clc
-    cmp [r14 + 6], byte 1       ; check if C register is set
-    jne .CF_done_arg1_is_memory_address
-                                ; C register is set, set CF flag as well
-    stc
-.CF_done_arg1_is_memory_address:
-                                ; CF value is set correctly
-    mov [r14 + 6], byte 0       ; old value of C register can be forgotten, will be set quickly
-                                ; CF is ready, now perfmorm rcr
-    rcr byte [rsi + 9], 1       ; rotate with carry
-                                ; [rsi + 9] is a memory address correctly rotated with CF
-    setc [r14 + 6]              ; set C register if CF is set after rcr instruction
-                                ; operation finished 
-    ret
 
-.arg1_is_a_register:
-    movsx r15, r15b
-    clc
+    xor r13b, r13b              ; r13b = 0
     cmp [r14 + 6], byte 1       ; check if C register is set
-    jne .CF_done_arg1_is_a_register
-                                ; C register is set, set CF flag as well
-    stc
-.CF_done_arg1_is_a_register:
+    jne .CF_done_arg1_is_a_memory_address
+
+    inc r13b                    ; r13b = 1, representing that CF flag is set
+.CF_done_arg1_is_a_memory_address:
+                                ; cf set <=> (r13b == 1)
+    cmp r13b, 1
+    jne .CF_is_not_set_arg1_memory
+    
+    stc 
+    jmp .finish_arg1_memory
+
+.CF_is_not_set_arg1_memory:
+    clc
+    jmp .finish_arg1_memory
+
+.finish_arg1_memory:
                                 ; CF value is set correctly
     mov [r14 + 6], byte 0       ; old value of C register can be forgotten, will be set quickly
                                 ; CF is ready, now perform rcr
+                                
+    rcr byte [rsi + r9], 1
+                                ; r14 + r15 is a register correctly rotated with CF
+    setc [r14 + 6]              ; set C register if CF is set after rcr instruction
+                                ; operation finished
+    ret
+
+
+
+
+
+.arg1_is_a_register:
+    movsx r15, r15b
+    xor r13b, r13b              ; r13b = 0
+    cmp [r14 + 6], byte 1       ; check if C register is set
+    jne .CF_done_arg1_is_a_register
+                                ; C register is set, set CF flag as well
+    inc r13b                    ; r13b = 1, representing that CF flag is set
+.CF_done_arg1_is_a_register:
+                                ; CF set <=> (r13b == 1)
+    cmp r13b, 1
+    jne .CF_is_not_set
+                                ; CF is set
+    stc
+    jmp .finish_arg1_register
+
+.CF_is_not_set:
+    clc
+    jmp .finish_arg1_register
+
+.finish_arg1_register:
+                                ; CF value is set correctly
+    mov [r14 + 6], byte 0       ; old value of C register can be forgotten, will be set quickly
+                                ; CF is ready, now perform rcr
+
     rcr byte [r14 + r15], 1     ; rotate with carry
                                 ; r14 + r15 is a register correctly rotated with CF
     setc [r14 + 6]              ; set C register if CF is set after rcr instruction
@@ -479,6 +509,9 @@ JZ:
 
 JNZ:
     cmp [r14 + 7], byte 0
+
+    ; mov r13b, [r14 + 7]
+    ; mov [r14], r13b
     jne decode_and_perform_instruction.finish
                             ; Z is not set
                             ; add imm8 * 2 to rbx and steps and imm8 to r8
@@ -600,6 +633,7 @@ so_emul:
     jl .instructions_loop
 
 .finish:
+
     mov rax, [rel state]
     pop rbp
     pop r15
