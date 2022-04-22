@@ -390,8 +390,41 @@ CMPI:
 ; kod 0x7001 + 0x100 * arg1
 ; Rotuje zawartość arg o jeden bit w prawo poprzez znacznik C. Nie modyfikuje znacznika Z.
 RCR:
+    mov r15b, [rel arg1]        ; arg1 is the value that will be rotated alongside C register
+    cmp r15b, 3
+    jle .arg1_is_a_register
+    call set_arg_1_to_memory_address
+                                ; rsi + r9 now points to correct memory address
+    clc
+    cmp [r14 + 6], byte 1       ; check if C register is set
+    jne .CF_done_arg1_is_memory_address
+                                ; C register is set, set CF flag as well
+    stc
+.CF_done_arg1_is_memory_address:
+                                ; CF value is set correctly
+    mov [r14 + 6], byte 0       ; old value of C register can be forgotten, will be set quickly
+                                ; CF is ready, now perfmorm rcr
+    rcr byte [rsi + 9], 1       ; rotate with carry
+                                ; [rsi + 9] is a memory address correctly rotated with CF
+    setc [r14 + 6]              ; set C register if CF is set after rcr instruction
+                                ; operation finished 
+    ret
 
-
+.arg1_is_a_register:
+    movsx r15, r15b
+    clc
+    cmp [r14 + 6], byte 1       ; check if C register is set
+    jne .CF_done_arg1_is_a_register
+                                ; C register is set, set CF flag as well
+    stc
+.CF_done_arg1_is_a_register:
+                                ; CF value is set correctly
+    mov [r14 + 6], byte 0       ; old value of C register can be forgotten, will be set quickly
+                                ; CF is ready, now perform rcr
+    rcr byte [r14 + r15], 1     ; rotate with carry
+                                ; r14 + r15 is a register correctly rotated with CF
+    setc [r14 + 6]              ; set C register if CF is set after rcr instruction
+                                ; operation finished
     ret
 
 
@@ -500,7 +533,7 @@ decode_and_perform_instruction:
     je XORI
     cmp r12b, 7
     je RCR
-    cmp r12b, 6                         ; could be ADDI or CMPI
+    cmp r12b, 6                         
     je .ADDI_OR_CMPI
     cmp r12b, 8
     je .CLC_OR_STC
