@@ -461,6 +461,9 @@ RCR:
 ; r14 + 4 to PC
 ; czy PC + r13b > 255?
 JMP:
+
+
+
                                 ; since instruction is known, r12 can be overwritten
     
     mov r15b, [r14 + 4]         ; save old PC value
@@ -481,23 +484,24 @@ JMP:
     cmp r15b, r12b
     jl .new_PC_is_bigger
                                 ; new PC is smaller, diff is old - new
-    sub r15b, r12b
-    movsx r15, r15b
-    sub r8, r15                 ; update counter
-    shl r15, 1
-    sub rbp, r15
-    mov [rel steps], rbp
+    
+
+    sub r15b, r12b              ; difference: old - new        
+    movsx r15, r15b             ; move to 64-bit register
+    shl r15, 1                  ; multiply by two, because each instruction is 2-byte long
+    sub rbp, r15                ; subtract step count
+    mov [rel steps], rbp        ; update step count variable
     jmp decode_and_perform_instruction.finish
     
 .new_PC_is_bigger:
                                 ; r12b > r15b
-    sub r12b, r15b
-    mov r15b, r12b
+    sub r12b, r15b              ; difference: new - old
+    mov r15b, r12b              ; move to 64-bit register
     movsx r15, r15b
     add r8, r15                 ; update counter
-    shl r15, 1
-    add rbp, r15
-    mov [rel steps], rbp
+    shl r15, 1                  ; multiply by two, because each instruction is 2-byte long
+    add rbp, r15                ; subtract step count
+    mov [rel steps], rbp        ; update step count variable
     jmp decode_and_perform_instruction.finish
 
 JZ:
@@ -508,13 +512,25 @@ JZ:
     jmp JMP
 
 JNZ:
+;     ; zmiany debug 
+;     cmp rbp, 26
+;     jne .koniec_debugu
+;     cmp [r14 + 7], byte 0
+;     jne .koniec_debugu
+;     ; dalej nie ma ustawionego Z
+;     mov [r14 + 3], byte 69
+
+; .koniec_debugu:
+;     ; zmiany debug
+
+
     cmp [r14 + 7], byte 0
 
-    ; mov r13b, [r14 + 7]
-    ; mov [r14], r13b
     jne decode_and_perform_instruction.finish
                             ; Z is not set
                             ; add imm8 * 2 to rbx and steps and imm8 to r8
+    
+
     jmp JMP           
 
 JC:
@@ -536,7 +552,9 @@ decode_and_perform_instruction:
     add rbp, 2
     mov [rel steps], rbp
     shr r12w, 14
-    
+
+
+    ; tu jeszcze nie ma ustawionego Z    
     cmp word r12w, 0
     jne .other_instruction              ; instruction does not use arg1 and arg2
 .classic_instruction:
@@ -556,6 +574,9 @@ decode_and_perform_instruction:
 
 
 .other_instruction:
+
+
+    ; tu jeszcze nie ma ustawionego Z
     mov r12w, [rel instruction]
     shr r12w, 12                    
     cmp r12w, 4
@@ -570,6 +591,9 @@ decode_and_perform_instruction:
     je .ADDI_OR_CMPI
     cmp r12b, 8
     je .CLC_OR_STC
+
+    
+    ; tu jeszcze nie ma ustawionego Z
     cmp r12b, 12
     je .jump_instruction
 
@@ -584,8 +608,11 @@ decode_and_perform_instruction:
     jmp STC                             ; instruction is 0x8XXX and is not 0x8000, so it must be STC
 
 .jump_instruction:
+    
+    ; tu jeszcze nie ma ustawionego dubugu
     cmp [rel instruction], word 0xC500  ; compare with minimal value of JZ instruction
     jge JZ
+    ; tu jeszcze nie ma ustawionego Z
     cmp [rel instruction], word 0xC400  ; compare with minimal value of JNZ instruction
     jge JNZ
     cmp [rel instruction], word 0xC300  ; compare with minimal value of JC instruction
@@ -621,8 +648,11 @@ so_emul:
     cmp rdx, 0
     je .finish
 .instructions_loop:
+    ; tu dalej Z nie jest
+
     inc byte [r14 + 4]       ; increase program counter
     call decode_parameters
+    ; tu dalej Z nie jest ustawioen
     call decode_and_perform_instruction
     ; check for BRK
     cmp r10, 1
@@ -633,6 +663,12 @@ so_emul:
     jl .instructions_loop
 
 .finish:
+    ; cmp rbp, 24
+    ; jne .fff
+    ; cmp [r14 + 7], byte 0 ; czy Z wynosi 0
+    ; jne .fff
+    ; add [r14 + 3], byte 69
+.fff:
 
     mov rax, [rel state]
     pop rbp
