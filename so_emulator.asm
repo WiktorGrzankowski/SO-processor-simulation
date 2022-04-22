@@ -384,6 +384,44 @@ RCR:
 
     ret
 
+
+JMP:
+    mov r13b, [rel imm8]
+    movsx r13, r13b
+    add r8, r13             ; add how many steps will be skipped
+    shl r13b, 1             ; multiple by 2 in order to skip instructions that are 2 bytes long
+    add rbp, r13            ; add bytes skipped to byte counter
+    mov [rel steps], rbp    ; update steps variable
+    jmp decode_and_perform_instruction.finish 
+
+JZ:
+    cmp [r14 + 7], byte 1
+    jne decode_and_perform_instruction.finish
+                            ; Z is set
+                            ; add imm8 * 2 to rbx and steps and imm8 to r8
+    jmp JMP
+
+JNZ:
+    cmp [r14 + 7], byte 0
+    jne decode_and_perform_instruction.finish
+                            ; Z is not set
+                            ; add imm8 * 2 to rbx and steps and imm8 to r8
+    jmp JMP           
+
+JC:
+    cmp [r14 + 6], byte 1
+    jne decode_and_perform_instruction.finish
+                            ; C is set
+                            ; add imm8 * 2 to rbx and steps and imm8 to r8
+    jmp JMP
+
+JNC:
+    cmp [r14 + 6], byte 0
+    jne decode_and_perform_instruction.finish
+                            ; C is not set
+                            ; add imm8 * 2 to rbx and steps and imm8 to r8
+    jmp JMP
+
 decode_and_perform_instruction:
     mov r12w, [rdi + rbp]
     add rbp, 2
@@ -423,6 +461,8 @@ decode_and_perform_instruction:
     je .ADDI_OR_CMPI
     cmp r12b, 8
     je .CLC_OR_STC
+    cmp r12b, 12
+    je .jump_instruction
 
 .ADDI_OR_CMPI:
     cmp [rel instruction], word 0x6800
@@ -433,6 +473,19 @@ decode_and_perform_instruction:
     cmp [rel instruction], word 0x8000
     je CLC                              ; instruction is CLC    
     jmp STC                             ; instruction is 0x8XXX and is not 0x8000, so it must be STC
+
+.jump_instruction:
+    cmp [rel instruction], word 0xC500  ; compare with minimal value of JZ instruction
+    jge JZ
+    cmp [rel instruction], word 0xC400  ; compare with minimal value of JNZ instruction
+    jge JNZ
+    cmp [rel instruction], word 0xC300  ; compare with minimal value of JC instruction
+    jge JC
+    cmp [rel instruction], word 0xC200  ; compare with minimal value of JNC instruction
+    jge JNC
+                                        ; it's a jump instruction, bute none of the above
+                                        ; so it must be simply a JMP instruction
+    jmp JMP
 
 .finish:
     ret
@@ -455,6 +508,8 @@ so_emul:
     mov r14, state
     xor r8, r8
     xor r10, r10              ; r10 contains info about break. 1 means BRK was encountered
+    cmp rdx, 0
+    je .finish
 .instructions_loop:
     inc byte [r14 + 4]       ; increase program counter
     call decode_parameters
@@ -465,7 +520,7 @@ so_emul:
     
     inc r8
     cmp r8, rdx
-    jne .instructions_loop
+    jl .instructions_loop
 
 .finish:
     mov rax, [rel state]
