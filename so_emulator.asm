@@ -154,11 +154,15 @@ ADD:
                                     ; arg1 is a memory address
     call set_arg_1_to_memory_address ; rsi + r9 is a correct address to write onto
     add [rsi + r9], r13b
+    mov al, [rsi + r9]
+    call set_Z_register
     jmp decode_and_perform_instruction.finish
 
 .arg1_is_a_register:
     movsx r15, r15b
     add [r14 + r15], r13b
+    mov al, [r14 + r15]
+    call set_Z_register
     jmp decode_and_perform_instruction.finish
 
 ; nie wiem w którym momencie należy dodać wartość carry flag
@@ -210,11 +214,15 @@ SUB:
                                     ; arg1 is a memory address
     call set_arg_1_to_memory_address ; rsi + r9 is a correct address to write onto
     sub [rsi + r9], r13b
+    mov al, [rsi + r9]
+    call set_Z_register
     jmp decode_and_perform_instruction.finish
 
 .arg1_is_a_register:
     movsx r15, r15b
     sub [r14 + r15], r13b
+    mov al, [r14 + r15]
+    call set_Z_register
     jmp decode_and_perform_instruction.finish
 
 ; chyba dziala w porzadku, analogicznie do ADC
@@ -379,20 +387,55 @@ CMPI:
     jmp decode_and_perform_instruction.finish
 
 ; todo
+; kod 0x7001 + 0x100 * arg1
+; Rotuje zawartość arg o jeden bit w prawo poprzez znacznik C. Nie modyfikuje znacznika Z.
 RCR:
 
 
     ret
 
 
+; r14 + 4 to PC
+; czy PC + r13b > 255?
 JMP:
-    mov r13b, [rel imm8]
-    movsx r13, r13b
-    add r8, r13             ; add how many steps will be skipped
-    shl r13b, 1             ; multiple by 2 in order to skip instructions that are 2 bytes long
-    add rbp, r13            ; add bytes skipped to byte counter
-    mov [rel steps], rbp    ; update steps variable
-    jmp decode_and_perform_instruction.finish 
+                                ; since instruction is known, r12 can be overwritten
+    
+    mov r15b, [r14 + 4]         ; save old PC value
+    mov r13b, [rel imm8]        ; get jump value
+                                ; if PC = 13 and jump_value = -7 so actually 249
+                                ; then PC = 262, but overflows and actually contains 6
+    add [r14 + 4], r13b
+                                ; [r14 + 4] is set
+                                ; now adjust rbp
+                                ; if [r14 + 4] is now smaller than it was
+                                ; then make rbp smaller as well
+                                ; by how much?
+                                ; by 2 times new_PC - old_PC
+
+    mov r12b, [r14 + 4]         ; r12b is the new_PC
+                                ; if new > old, then add new - old
+                                ;               else add old - new
+    cmp r15b, r12b
+    jl .new_PC_is_bigger
+                                ; new PC is smaller, diff is old - new
+    sub r15b, r12b
+    movsx r15, r15b
+    sub r8, r15                 ; update counter
+    shl r15, 1
+    sub rbp, r15
+    mov [rel steps], rbp
+    jmp decode_and_perform_instruction.finish
+    
+.new_PC_is_bigger:
+                                ; r12b > r15b
+    sub r12b, r15b
+    mov r15b, r12b
+    movsx r15, r15b
+    add r8, r15                 ; update counter
+    shl r15, 1
+    add rbp, r15
+    mov [rel steps], rbp
+    jmp decode_and_perform_instruction.finish
 
 JZ:
     cmp [r14 + 7], byte 1
@@ -486,6 +529,7 @@ decode_and_perform_instruction:
                                         ; it's a jump instruction, bute none of the above
                                         ; so it must be simply a JMP instruction
     jmp JMP
+    
 
 .finish:
     ret
