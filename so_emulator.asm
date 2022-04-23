@@ -31,14 +31,14 @@ set_arg2_to_memory_address:
     cmp r13b, 4
     jne .check_for_5
     mov r13b, [r14 + 2]     ; get X from state
-    movsx r9, r13b          ; r9 is now an address, rsi + r9 means [X]
+    movzx r9, r13b          ; r9 is now an address, rsi + r9 means [X]
     mov r13b, [rsi + r9]
     jmp .finish
 .check_for_5:
     cmp r13b, 5
     jne .check_for_6
     mov r13b, [r14 + 3]     ; get Y from state
-    movsx r9, r13b          ; r9 is now an address, rsi + r9 means [Y]
+    movzx r9, r13b          ; r9 is now an address, rsi + r9 means [Y]
     mov r13b, [rsi + r9]
     jmp .finish
 .check_for_6:
@@ -50,7 +50,7 @@ set_arg2_to_memory_address:
     add r13b, [r14 + 1]     ; add D, sum is X + D
     
     ; zmiany!
-    movsx r9, r13b          ; r9 is now an address, rsi + r9 means [X + D]
+    movzx r9, r13b          ; r9 is now an address, rsi + r9 means [X + D]
     mov r13b, [rsi + r9]
     ; zmiany
     jmp .finish
@@ -58,14 +58,14 @@ set_arg2_to_memory_address:
     cmp r13b, 7
     mov r13b, [r14 + 3]     ; get Y from state
     add r13b, [r14 + 1]     ; add D, sum is Y + D
-    movsx r9, r13b          ; r9 is now an address, rsi + r9 means [Y + D]
+    movzx r9, r13b          ; r9 is now an address, rsi + r9 means [Y + D]
     mov r13b, [rsi + r9]
 .finish:
     ret
 
 
 set_arg2_to_register_value:
-    movsx r9, r13b          ; get arg2 value as 64-bits
+    movzx r9, r13b          ; get arg2 value as 64-bits
     mov r13b, [r14 + r9]    ; set value of arg2 with correct register
     ret
 
@@ -83,26 +83,26 @@ set_arg_1_to_memory_address:
     cmp r15b, 4
     jne .check_for_5
     mov r15b, [r14 + 2]     ; get X from state
-    movsx r9, r15b          ; r9 is now an address, rsi + r9 means [X]
+    movzx r9, r15b          ; r9 is now an address, rsi + r9 means [X]
     jmp .finish
 .check_for_5:
     cmp r15b, 5
     jne .check_for_6
     mov r15b, [r14 + 3]     ; get Y from state
-    movsx r9, r15b          ; r9 is now an address, rsi + r9 means [Y]
+    movzx r9, r15b          ; r9 is now an address, rsi + r9 means [Y]
     jmp .finish
 .check_for_6:
     cmp r15b, 6
     jne .check_for_7
     mov r15b, [r14 + 2]     ; get X from state
     add r15b, [r14 + 1]     ; add D, sum is X + D
-    movsx r9, r15b          ; r9 is now an address, rsi + r9 means [X + D]
+    movzx r9, r15b          ; r9 is now an address, rsi + r9 means [X + D]
     jmp .finish
 .check_for_7:
     cmp r15b, 7
     mov r15b, [r14 + 3]     ; get Y from state
     add r15b, [r14 + 1]     ; add D, sum is Y + D
-    movsx r9, r15b          ; r9 is now an address, rsi + r9 means [Y + D]
+    movzx r9, r15b          ; r9 is now an address, rsi + r9 means [Y + D]
 .finish:
     ret  
 
@@ -135,7 +135,7 @@ OR:
     jmp decode_and_perform_instruction.finish
 
 .arg1_is_a_register:
-    movsx r15, r15b
+    movzx r15, r15b
     or [r14 + r15], r13b
     ; set Z register
     mov al, [r14 + r15]
@@ -170,8 +170,8 @@ XCHG:
                                     ; xchg is not atomic
 .is_not_atomic_arg1_reg_arg2_reg:
                                     ; swap([r14 + r15], [r14 + r13])
-    movsx r15, r15b
-    movsx r13, r13b
+    movzx r15, r15b
+    movzx r13, r13b
                                     ; instruction is known, r12 can be overwritten
     mov r12b, byte [r14 + r15]
                                     ; r9 is not used, can be overwritten
@@ -181,7 +181,7 @@ XCHG:
     jmp decode_and_perform_instruction.finish
 
 .is_not_atomic_arg1_reg_arg2_mem:
-    movsx r15, r15b                 ; [r14 + r15] is arg1 value, a register
+    movzx r15, r15b                 ; [r14 + r15] is arg1 value, a register
                                     ; now make [rsi + r9] be a value of arg2
     call set_arg2_to_memory_address
                                     ; swap([r14 + r15], [rsi + r9])
@@ -211,7 +211,7 @@ XCHG:
     jmp decode_and_perform_instruction.finish
 
 .is_atomic_arg1_mem_arg2_reg:
-    movsx r13, r13b
+    movzx r13, r13b
                                     ; [r14 + r13] is arg2's value in register
                                     ; r12 can now be overwritten
     mov r12b, [r14 + r13]           ; arg2 value 
@@ -230,14 +230,14 @@ ADD:
     cmp r15b, 3     
     jle .arg1_is_a_register
                                     ; arg1 is a memory address
-    call set_arg_1_to_memory_address ; rsi + r9 is a correct address to write onto
+    call set_arg_1_to_memory_address; rsi + r9 is a correct address to write onto
     add [rsi + r9], r13b
     mov al, [rsi + r9]
     call set_Z_register
     jmp decode_and_perform_instruction.finish
 
 .arg1_is_a_register:
-    movsx r15, r15b
+    movzx r15, r15b
     add [r14 + r15], r13b
     mov al, [r14 + r15]
     call set_Z_register
@@ -268,7 +268,7 @@ ADC:
     jmp decode_and_perform_instruction.finish
 
 .arg1_is_a_register:
-    movsx r15, r15b
+    movzx r15, r15b
 
     mov al, 0           ; to later set C register
     mov [r14 + 6], al   ; to later set C register, old value can now be forgotten
@@ -297,7 +297,7 @@ SUB:
     jmp decode_and_perform_instruction.finish
 
 .arg1_is_a_register:
-    movsx r15, r15b
+    movzx r15, r15b
     sub [r14 + r15], r13b
     mov al, [r14 + r15]
     call set_Z_register
@@ -327,7 +327,7 @@ SBB:
     jmp decode_and_perform_instruction.finish
 
 .arg1_is_a_register:
-    movsx r15, r15b
+    movzx r15, r15b
 
     mov al, 0               ; to later set C register
     mov [r14 + 6], al       ; to later set C register, old value can now be forgotten
@@ -352,7 +352,7 @@ MOV:
     mov [rsi + r9], r13b
     jmp decode_and_perform_instruction.finish
 .arg1_is_a_register:
-    movsx r15, r15b
+    movzx r15, r15b
     mov [r14 + r15], r13b
     jmp decode_and_perform_instruction.finish
 
@@ -368,7 +368,7 @@ MOVI:
     jmp decode_and_perform_instruction.finish
 
 .arg1_is_a_register:
-    movsx r15, r15b
+    movzx r15, r15b
     mov [r14 + r15], r13b
     jmp decode_and_perform_instruction.finish
 
@@ -405,7 +405,7 @@ XORI:
     jmp decode_and_perform_instruction.finish
 
 .arg1_is_a_register:
-    movsx r15, r15b
+    movzx r15, r15b
 
     xor [r14 + r15], r13b
     mov al, [r14 + r15]
@@ -427,7 +427,7 @@ ADDI:
     jmp decode_and_perform_instruction.finish
 
 .arg1_is_a_register:
-    movsx r15, r15b
+    movzx r15, r15b
     add [r14 + r15], r13b   ; add imm8 to given memory address
     mov al, [r14 + r15]     ; to set Z register
     call set_Z_register
@@ -450,7 +450,7 @@ CMPI:
     inc byte [r14 + 7]      ; will set Z to 1 if ZF is set, stay 0 otherwise
 
 .arg1_is_a_register:
-    movsx r15, r15b
+    movzx r15, r15b
     ; cmp arg1, imm8
     mov [r14 + 7], byte 0   ; Z register's value will be now set to 1 if comparison resultet in 0
     mov [r14 + 6], byte 0   ; C register can now be forgotten and will be set now
@@ -503,7 +503,7 @@ RCR:
 
 
 .arg1_is_a_register:
-    movsx r15, r15b
+    movzx r15, r15b
     xor r13b, r13b              ; r13b = 0
     cmp [r14 + 6], byte 1       ; check if C register is set
     jne .CF_done_arg1_is_a_register
@@ -559,7 +559,7 @@ JMP:
     
 
     sub r15b, r12b              ; difference: old - new        
-    movsx r15, r15b             ; move to 64-bit register
+    movzx r15, r15b             ; move to 64-bit register
     shl r15, 1                  ; multiply by two, because each instruction is 2-byte long
     sub rbp, r15                ; subtract step count
     mov [rel steps], rbp        ; update step count variable
@@ -569,7 +569,7 @@ JMP:
                                 ; r12b > r15b
     sub r12b, r15b              ; difference: new - old
     mov r15b, r12b              ; move to 64-bit register
-    movsx r15, r15b
+    movzx r15, r15b
     add r8, r15                 ; update counter
     shl r15, 1                  ; multiply by two, because each instruction is 2-byte long
     add rbp, r15                ; subtract step count
@@ -700,7 +700,8 @@ so_emul:
     mov rbp, [rel steps]    ; rbp contains the number of instructions performed already
                             ; important, because code can be performed in steps
                             ; by calling so_emul multiple times to perform next instructions
-    mov r14, state
+    lea r14, [rel state]
+    ; mov r14, state
     xor r8, r8
     xor r10, r10              ; r10 contains info about break. 1 means BRK was encountered
     cmp rdx, 0
