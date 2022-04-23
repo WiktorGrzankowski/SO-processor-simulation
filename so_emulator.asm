@@ -1,19 +1,27 @@
 global so_emul
 
+%ifndef CORES
+%define CORES 4
+%endif
+
 section .bss
 
-state:          resb 8
-arg1:           resb 1
-arg2:           resb 1
-imm8:           resb 1
-instruction:    resw 1
-steps:          resq 1
+state:          resq CORES
+arg1:           resb CORES
+arg2:           resb CORES
+imm8:           resb CORES
+instruction:    resw CORES
 
 section .text
 
 
 decode_parameters:
     ; tu nalezy przesuwac samo [rdi], zeby moc krokowo wykonywac instrukcje
+    mov bpl, [r14 + 4]
+    dec bpl
+    movsx rbp, bpl
+    shl rbp, 1
+    
     mov r13w, word [rdi + rbp]       ; r13w constains current instruction value
     mov [rel instruction], r13w ; save instruction value
     mov [rel imm8], r13b
@@ -66,6 +74,8 @@ set_arg2_to_memory_address:
 
 set_arg2_to_register_value:
     movzx r9, r13b          ; get arg2 value as 64-bits
+    ; debug
+
     mov r13b, [r14 + r9]    ; set value of arg2 with correct register
     ret
 
@@ -136,6 +146,8 @@ OR:
 
 .arg1_is_a_register:
     movzx r15, r15b
+    ;debug
+    ; add r15, r11
     or [r14 + r15], r13b
     ; set Z register
     mov al, [r14 + r15]
@@ -171,6 +183,9 @@ XCHG:
 .is_not_atomic_arg1_reg_arg2_reg:
                                     ; swap([r14 + r15], [r14 + r13])
     movzx r15, r15b
+    ; debug
+    ; add r15, r11
+    ; add r13, r11
     movzx r13, r13b
                                     ; instruction is known, r12 can be overwritten
     mov r12b, byte [r14 + r15]
@@ -183,6 +198,8 @@ XCHG:
 .is_not_atomic_arg1_reg_arg2_mem:
     movzx r15, r15b                 ; [r14 + r15] is arg1 value, a register
                                     ; now make [rsi + r9] be a value of arg2
+    ; debug
+    ; add r15, r11
     call set_arg2_to_memory_address
                                     ; swap([r14 + r15], [rsi + r9])
                                     ; r12 and r13 can now be overwritten
@@ -214,6 +231,8 @@ XCHG:
     movzx r13, r13b
                                     ; [r14 + r13] is arg2's value in register
                                     ; r12 can now be overwritten
+    ; debug
+    ; add r13, r11
     mov r12b, [r14 + r13]           ; arg2 value 
 
     call set_arg_1_to_memory_address
@@ -238,6 +257,8 @@ ADD:
 
 .arg1_is_a_register:
     movzx r15, r15b
+    ; debug
+    ; add r15, r11
     add [r14 + r15], r13b
     mov al, [r14 + r15]
     call set_Z_register
@@ -269,6 +290,8 @@ ADC:
 
 .arg1_is_a_register:
     movzx r15, r15b
+    ; debug
+    ; add r15, r11
 
     mov al, 0           ; to later set C register
     mov [r14 + 6], al   ; to later set C register, old value can now be forgotten
@@ -298,6 +321,7 @@ SUB:
 
 .arg1_is_a_register:
     movzx r15, r15b
+    ; add r15, r11
     sub [r14 + r15], r13b
     mov al, [r14 + r15]
     call set_Z_register
@@ -328,6 +352,8 @@ SBB:
 
 .arg1_is_a_register:
     movzx r15, r15b
+    ; debug
+    ; add r15, r11
 
     mov al, 0               ; to later set C register
     mov [r14 + 6], al       ; to later set C register, old value can now be forgotten
@@ -353,6 +379,8 @@ MOV:
     jmp decode_and_perform_instruction.finish
 .arg1_is_a_register:
     movzx r15, r15b
+    ; debug
+    ; add r15, r11
     mov [r14 + r15], r13b
     jmp decode_and_perform_instruction.finish
 
@@ -369,6 +397,7 @@ MOVI:
 
 .arg1_is_a_register:
     movzx r15, r15b
+    ; add r15, r11
     mov [r14 + r15], r13b
     jmp decode_and_perform_instruction.finish
 
@@ -376,7 +405,8 @@ MOVI:
 ; to może być do zmiany
 ; nie wiem czy to na pewno dobrze robi, że usta
 BRK:
-    mov r10, 1      ; 1 means to break
+    mov r8, rdx
+    ; mov r10, 1      ; 1 means to break
     jmp decode_and_perform_instruction.finish
 
 CLC:
@@ -406,7 +436,7 @@ XORI:
 
 .arg1_is_a_register:
     movzx r15, r15b
-
+    ; add r15, r11
     xor [r14 + r15], r13b
     mov al, [r14 + r15]
 
@@ -428,6 +458,7 @@ ADDI:
 
 .arg1_is_a_register:
     movzx r15, r15b
+    ; add r15, r11
     add [r14 + r15], r13b   ; add imm8 to given memory address
     mov al, [r14 + r15]     ; to set Z register
     call set_Z_register
@@ -451,6 +482,7 @@ CMPI:
 
 .arg1_is_a_register:
     movzx r15, r15b
+    ; add r15, r11
     ; cmp arg1, imm8
     mov [r14 + 7], byte 0   ; Z register's value will be now set to 1 if comparison resultet in 0
     mov [r14 + 6], byte 0   ; C register can now be forgotten and will be set now
@@ -504,6 +536,8 @@ RCR:
 
 .arg1_is_a_register:
     movzx r15, r15b
+    ; debug
+    ; add r15, r11
     xor r13b, r13b              ; r13b = 0
     cmp [r14 + 6], byte 1       ; check if C register is set
     jne .CF_done_arg1_is_a_register
@@ -560,9 +594,6 @@ JMP:
 
     sub r15b, r12b              ; difference: old - new        
     movzx r15, r15b             ; move to 64-bit register
-    shl r15, 1                  ; multiply by two, because each instruction is 2-byte long
-    sub rbp, r15                ; subtract step count
-    mov [rel steps], rbp        ; update step count variable
     jmp decode_and_perform_instruction.finish
     
 .new_PC_is_bigger:
@@ -571,9 +602,6 @@ JMP:
     mov r15b, r12b              ; move to 64-bit register
     movzx r15, r15b
     add r8, r15                 ; update counter
-    shl r15, 1                  ; multiply by two, because each instruction is 2-byte long
-    add rbp, r15                ; subtract step count
-    mov [rel steps], rbp        ; update step count variable
     jmp decode_and_perform_instruction.finish
 
 JZ:
@@ -607,8 +635,6 @@ JNC:
 
 decode_and_perform_instruction:
     mov r12w, [rdi + rbp]
-    add rbp, 2
-    mov [rel steps], rbp
     shr r12w, 14
 
 
@@ -697,25 +723,22 @@ so_emul:
     push rbp
     ; here begins the main loop
     ; we can modify rdx, so that will be the main loop iterator
-    mov rbp, [rel steps]    ; rbp contains the number of instructions performed already
-                            ; important, because code can be performed in steps
-                            ; by calling so_emul multiple times to perform next instructions
+    ; mov rcx, 1
+    mov r11, rcx
+    ; shl rcx, 3
+    shl r11, 3              ; r10 = rcx * 8, to refer correctly to r14 as rcx-th core
+
     lea r14, [rel state]
+    lea r14, [r14 + r11]
     ; mov r14, state
     xor r8, r8
-    xor r10, r10              ; r10 contains info about break. 1 means BRK was encountered
     cmp rdx, 0
     je .finish
 .instructions_loop:
-    ; tu dalej Z nie jest
-
     inc byte [r14 + 4]       ; increase program counter
     call decode_parameters
-    ; tu dalej Z nie jest ustawioen
     call decode_and_perform_instruction
-    ; check for BRK
-    cmp r10, 1
-    je .finish
+
     
     inc r8
     cmp r8, rdx
@@ -723,7 +746,7 @@ so_emul:
 
 .finish:
 
-    mov rax, [rel state]
+    mov rax, [r14]
     pop rbp
     pop r15
     pop r14
@@ -731,3 +754,4 @@ so_emul:
     pop r12
 
     ret
+
