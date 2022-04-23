@@ -17,12 +17,24 @@ section .text
 
 decode_parameters:
     ; tu nalezy przesuwac samo [rdi], zeby moc krokowo wykonywac instrukcje
-    mov bpl, [r14 + 4]
-    dec bpl
-    movsx rbp, bpl
-    shl rbp, 1
+
+    ; [rbp] będzie się równać efektywnie [rdi + PC]
+    mov bpl, [r14 + 4]  ; rbp = PC
+    dec bpl             ; becasue we increment it earlier for the next instruction
+    movzx rbp, bpl
+    ; dec rbp
+    shl rbp, 1         ; rbp = 2 * PC
+    add rbp, rdi        ; rbp = rdi + 2 * PC
+
+    ; mov bpl, [r14 + 4]
+    ; dec bpl
+    ; movsx rbp, bpl
+    ; shl rbp, 1
+    mov r13w, word [rbp]
+    ; mov r13w, word [rdi + rbp]       ; r13w constains current instruction value
     
-    mov r13w, word [rdi + rbp]       ; r13w constains current instruction value
+    mov r10w, r13w                  ; r10w will be used everywhere as the initial instruction value
+    
     mov [rel instruction], r13w ; save instruction value
     mov [rel imm8], r13b
     shr r13w, 3
@@ -32,7 +44,6 @@ decode_parameters:
     shr r13b, 5
     mov [rel arg2], r13b
     ret
-
 
 
 set_arg2_to_memory_address:
@@ -401,12 +412,8 @@ MOVI:
     mov [r14 + r15], r13b
     jmp decode_and_perform_instruction.finish
 
-
-; to może być do zmiany
-; nie wiem czy to na pewno dobrze robi, że usta
 BRK:
     mov r8, rdx
-    ; mov r10, 1      ; 1 means to break
     jmp decode_and_perform_instruction.finish
 
 CLC:
@@ -634,7 +641,9 @@ JNC:
     jmp JMP
 
 decode_and_perform_instruction:
-    mov r12w, [rdi + rbp]
+    mov r12w, word [rbp]
+    ; mov r12w, [rdi + rbp]
+
     shr r12w, 14
 
 
@@ -643,6 +652,7 @@ decode_and_perform_instruction:
     jne .other_instruction              ; instruction does not use arg1 and arg2
 .classic_instruction:
     mov r12b, [rel instruction]         ; look at the first byte to check instruction
+    ; shr r12b, 14
     cmp r12b, 4
     je ADD
     cmp r12b, 5
@@ -657,6 +667,23 @@ decode_and_perform_instruction:
     je SBB
     cmp r12b, 8                         
     je XCHG
+
+    ; mov r12b, [rel instruction]         ; look at the first byte to check instruction
+    
+    ; cmp r12b, 4
+    ; je ADD
+    ; cmp r12b, 5
+    ; je SUB
+    ; cmp r12b, 0
+    ; je MOV
+    ; cmp r12b, 2
+    ; je OR
+    ; cmp r12b, 6
+    ; je ADC
+    ; cmp r12b, 7
+    ; je SBB
+    ; cmp r12b, 8                         
+    ; je XCHG
 
     jmp .finish                         ; incorrect instruction
 
@@ -726,7 +753,7 @@ so_emul:
     ; mov rcx, 1
     mov r11, rcx
     ; shl rcx, 3
-    shl r11, 3              ; r10 = rcx * 8, to refer correctly to r14 as rcx-th core
+    shl r11, 3              ; r11 = rcx * 8, to refer correctly to r14 as rcx-th core
 
     lea r14, [rel state]
     lea r14, [r14 + r11]
