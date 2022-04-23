@@ -10,7 +10,7 @@ state:          resq CORES
 arg1:           resb CORES
 arg2:           resb CORES
 imm8:           resb CORES
-instruction:    resw CORES
+; instruction:    resw CORES
 
 section .text
 
@@ -22,20 +22,13 @@ decode_parameters:
     mov bpl, [r14 + 4]  ; rbp = PC
     dec bpl             ; becasue we increment it earlier for the next instruction
     movzx rbp, bpl
-    ; dec rbp
     shl rbp, 1         ; rbp = 2 * PC
     add rbp, rdi        ; rbp = rdi + 2 * PC
 
-    ; mov bpl, [r14 + 4]
-    ; dec bpl
-    ; movsx rbp, bpl
-    ; shl rbp, 1
     mov r13w, word [rbp]
-    ; mov r13w, word [rdi + rbp]       ; r13w constains current instruction value
+
     
-    mov r10w, r13w                  ; r10w will be used everywhere as the initial instruction value
-    
-    mov [rel instruction], r13w ; save instruction value
+    ; mov [rel instruction], r13w ; save instruction value
     mov [rel imm8], r13b
     shr r13w, 3
     shr r13b, 5
@@ -651,8 +644,7 @@ decode_and_perform_instruction:
     cmp word r12w, 0
     jne .other_instruction              ; instruction does not use arg1 and arg2
 .classic_instruction:
-    mov r12b, [rel instruction]         ; look at the first byte to check instruction
-    ; shr r12b, 14
+    mov r12b, byte [rbp]
     cmp r12b, 4
     je ADD
     cmp r12b, 5
@@ -690,8 +682,8 @@ decode_and_perform_instruction:
 .other_instruction:
 
 
-    ; tu jeszcze nie ma ustawionego Z
-    mov r12w, [rel instruction]
+    mov r12w, word [rbp]
+    ; mov r12w, [rel instruction]
     shr r12w, 12                    
     cmp r12w, 4
     je MOVI
@@ -709,26 +701,28 @@ decode_and_perform_instruction:
     je .jump_instruction
 
 .ADDI_OR_CMPI:
-    cmp [rel instruction], word 0x6800
+    cmp [rbp], word 0x6800
+    ; cmp [rel instruction], word 0x6800
     jl ADDI                             ; instruction value is below 0x6800, so it must be ADDI
     jmp CMPI
                                         ; instruction is 0x6XXX and is greater or equal to 0x6800, must be CMPI
 .CLC_OR_STC:
-    cmp [rel instruction], word 0x8000
+    cmp [rbp], word 0x8000
+    ; cmp [rel instruction], word 0x8000
     je CLC                              ; instruction is CLC    
     jmp STC                             ; instruction is 0x8XXX and is not 0x8000, so it must be STC
 
 .jump_instruction:
     
     ; tu jeszcze nie ma ustawionego dubugu
-    cmp [rel instruction], word 0xC500  ; compare with minimal value of JZ instruction
+    cmp [rbp], word 0xC500  ; compare with minimal value of JZ instruction
     jge JZ
     ; tu jeszcze nie ma ustawionego Z
-    cmp [rel instruction], word 0xC400  ; compare with minimal value of JNZ instruction
+    cmp [rbp], word 0xC400  ; compare with minimal value of JNZ instruction
     jge JNZ
-    cmp [rel instruction], word 0xC300  ; compare with minimal value of JC instruction
+    cmp [rbp], word 0xC300  ; compare with minimal value of JC instruction
     jge JC
-    cmp [rel instruction], word 0xC200  ; compare with minimal value of JNC instruction
+    cmp [rbp], word 0xC200  ; compare with minimal value of JNC instruction
     jge JNC
                                         ; it's a jump instruction, bute none of the above
                                         ; so it must be simply a JMP instruction
