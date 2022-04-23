@@ -381,7 +381,7 @@ MOVI:
     jmp decode_and_perform_instruction.finish
 
 BRK:
-    mov r8, rdx
+    mov rdx, 1
     jmp decode_and_perform_instruction.finish
 
 CLC:
@@ -568,14 +568,12 @@ JMP:
     sub r12b, r15b              ; difference: new - old
     mov r15b, r12b              ; move to 64-bit register
     movzx r15, r15b
-    add r8, r15                 ; update counter
     jmp decode_and_perform_instruction.finish
 
 JZ:
     cmp [r14 + 7], byte 1
     jne decode_and_perform_instruction.finish
                             ; Z is set
-                            ; add imm8 * 2 to rbx and steps and imm8 to r8
     jmp JMP
 
 JNZ:
@@ -583,21 +581,18 @@ JNZ:
 
     jne decode_and_perform_instruction.finish
                             ; Z is not set
-                            ; add imm8 * 2 to rbx and steps and imm8 to r8
     jmp JMP           
 
 JC:
     cmp [r14 + 6], byte 1
     jne decode_and_perform_instruction.finish
                             ; C is set
-                            ; add imm8 * 2 to rbx and steps and imm8 to r8
     jmp JMP
 
 JNC:
     cmp [r14 + 6], byte 0
     jne decode_and_perform_instruction.finish
                             ; C is not set
-                            ; add imm8 * 2 to rbx and steps and imm8 to r8
     jmp JMP
 
 decode_and_perform_instruction:
@@ -689,8 +684,6 @@ so_emul:
 
     lea r14, [rel state]
     lea r14, [r14 + rcx * 8]
-    ; mov r14, state
-    xor r8, r8
     cmp rdx, 0
     je .finish
 .instructions_loop:
@@ -698,10 +691,9 @@ so_emul:
     call decode_parameters
     call decode_and_perform_instruction
 
-    
-    inc r8
-    cmp r8, rdx
-    jl .instructions_loop
+    dec rdx
+    cmp rdx, 0
+    jg .instructions_loop
 
 .finish:
 
