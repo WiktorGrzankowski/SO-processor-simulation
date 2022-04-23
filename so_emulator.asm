@@ -142,7 +142,85 @@ OR:
     call set_Z_register
     jmp decode_and_perform_instruction.finish
 
+; Zamienia miejscami wartości arg1 i arg2. Nie modyfikuje znaczników. 
+; Jeśli arg1 wskazuje na pamięć, a arg2 jest rejestrem, to instrukcja jest atomowa.
+; Jeśli arg2 wskazuje na pamięć, to instrukcja nie jest atomowa.
+XCHG:
+    mov r15b, [rel arg1]
+    mov r13b, [rel arg2]
+    ; czy arg2 jest rejestrem?
+    cmp r13b, 3                 ; check if arg2 is a register
+    jle .may_be_atomic_arg2_reg
+                                ; arg2 is a memory address
+.cant_be_atomic_arg2_mem:
+    cmp r15b, 3                     ; check if arg1 is a register
+    jg .is_not_atomic_arg1_mem_arg2_mem
+                                    ; arg1 is a register
+                                    ; arg2 is a memory address
+    jmp .is_not_atomic_arg1_reg_arg2_mem
 
+
+.may_be_atomic_arg2_reg:
+                                    ; now check if arg1 is a memory address
+    cmp r15b, 3                     ; check if arg1 is a memory address
+    jg .is_atomic_arg1_mem_arg2_reg ; is > 3, so it's a memory address
+    
+                                    ; arg1 is a register
+                                    ; arg2 is a register
+                                    ; xchg is not atomic
+.is_not_atomic_arg1_reg_arg2_reg:
+                                    ; swap([r14 + r15], [r14 + r13])
+    movsx r15, r15b
+    movsx r13, r13b
+                                    ; instruction is known, r12 can be overwritten
+    mov r12b, byte [r14 + r15]
+                                    ; r9 is not used, can be overwritten
+    mov r9b, byte [r14 + r13]
+    mov byte [r14 + r15], r9b
+    mov byte [r14 + r13], r12b
+    jmp decode_and_perform_instruction.finish
+
+.is_not_atomic_arg1_reg_arg2_mem:
+    movsx r15, r15b                 ; [r14 + r15] is arg1 value, a register
+                                    ; now make [rsi + r9] be a value of arg2
+    call set_arg2_to_memory_address
+                                    ; swap([r14 + r15], [rsi + r9])
+                                    ; r12 and r13 can now be overwritten
+                                    ; as instructions and parameters are set
+    mov r12b, byte [r14 + r15]
+                                    ; r13b already contains value of [rsi + r9]
+                                    ; from set_arg2_to_memory_address
+    mov byte [r14 + r15], r13b
+    mov byte [rsi + r9], r12b
+    jmp decode_and_perform_instruction.finish
+
+.is_not_atomic_arg1_mem_arg2_mem:
+    call set_arg_1_to_memory_address ; [rsi + r9] points to correct arg1 address
+    mov r12, r9 
+                                    ; now [rsi + r12] points to arg1 address             
+                                    ; now make [rsi + r9] point to arg2 address
+    call set_arg2_to_memory_address ; [rsi + r9] points to arg2 address
+                                    ; swap([rsi + r9], [rsi + r12])
+                                    ; r13 and r15 can now be overwritten
+                                    ; as instructions and parameters are set
+    mov r15b, byte [rsi + r12]
+                                    ; r13b already contains value of [rsi + r9]
+                                    ; from set_arg2_to_memory_address
+    mov byte [rsi + r12], r13b
+    mov byte [rsi + r9], r15b
+    jmp decode_and_perform_instruction.finish
+
+.is_atomic_arg1_mem_arg2_reg:
+    movsx r13, r13b
+                                    ; [r14 + r13] is arg2's value in register
+                                    ; r12 can now be overwritten
+    mov r12b, [r14 + r13]           ; arg2 value 
+
+    call set_arg_1_to_memory_address
+                                    ; [rsi + r9] is arg1's memory address value
+    xchg byte [rsi + r9], r12b
+    mov byte [r14 + r13], r12b      ; [r14 + r13] := [rsi + r9]
+    jmp decode_and_perform_instruction.finish
 
 ADD:
     mov r15b, [rel arg1]
@@ -424,9 +502,6 @@ RCR:
     ret
 
 
-
-
-
 .arg1_is_a_register:
     movsx r15, r15b
     xor r13b, r13b              ; r13b = 0
@@ -461,9 +536,6 @@ RCR:
 ; r14 + 4 to PC
 ; czy PC + r13b > 255?
 JMP:
-
-
-
                                 ; since instruction is known, r12 can be overwritten
     
     mov r15b, [r14 + 4]         ; save old PC value
@@ -512,25 +584,11 @@ JZ:
     jmp JMP
 
 JNZ:
-;     ; zmiany debug 
-;     cmp rbp, 26
-;     jne .koniec_debugu
-;     cmp [r14 + 7], byte 0
-;     jne .koniec_debugu
-;     ; dalej nie ma ustawionego Z
-;     mov [r14 + 3], byte 69
-
-; .koniec_debugu:
-;     ; zmiany debug
-
-
     cmp [r14 + 7], byte 0
 
     jne decode_and_perform_instruction.finish
                             ; Z is not set
                             ; add imm8 * 2 to rbx and steps and imm8 to r8
-    
-
     jmp JMP           
 
 JC:
@@ -571,7 +629,10 @@ decode_and_perform_instruction:
     je ADC
     cmp r12b, 7
     je SBB
+    cmp r12b, 8                         
+    je XCHG
 
+    jmp .finish                         ; incorrect instruction
 
 .other_instruction:
 
@@ -591,9 +652,6 @@ decode_and_perform_instruction:
     je .ADDI_OR_CMPI
     cmp r12b, 8
     je .CLC_OR_STC
-
-    
-    ; tu jeszcze nie ma ustawionego Z
     cmp r12b, 12
     je .jump_instruction
 
@@ -663,12 +721,6 @@ so_emul:
     jl .instructions_loop
 
 .finish:
-    ; cmp rbp, 24
-    ; jne .fff
-    ; cmp [r14 + 7], byte 0 ; czy Z wynosi 0
-    ; jne .fff
-    ; add [r14 + 3], byte 69
-.fff:
 
     mov rax, [rel state]
     pop rbp
