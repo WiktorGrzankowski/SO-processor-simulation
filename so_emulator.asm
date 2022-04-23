@@ -162,7 +162,7 @@ XCHG:
                                 ; arg2 is a memory address
 .cant_be_atomic_arg2_mem:
     cmp r15b, 3                     ; check if arg1 is a register
-    jg .is_not_atomic_arg1_mem_arg2_mem
+    ja .is_not_atomic_arg1_mem_arg2_mem
                                     ; arg1 is a register
                                     ; arg2 is a memory address
     jmp .is_not_atomic_arg1_reg_arg2_mem
@@ -171,7 +171,7 @@ XCHG:
 .may_be_atomic_arg2_reg:
                                     ; now check if arg1 is a memory address
     cmp r15b, 3                     ; check if arg1 is a memory address
-    jg .is_atomic_arg1_mem_arg2_reg ; is > 3, so it's a memory address
+    ja .is_atomic_arg1_mem_arg2_reg ; is > 3, so it's a memory address
     
                                     ; arg1 is a register
                                     ; arg2 is a register
@@ -311,24 +311,29 @@ SUB:
     call set_Z_register
     jmp decode_and_perform_instruction.finish
 
-; chyba dziala w porzadku, analogicznie do ADC
+; MEGA IMPORTANT BŁĄD
+; psuje 41 instrukcje w multi core test!
+; ustawia m.in C na 255
 SBB:
     mov r15b, r10b
     mov r13b, r11b
     
     call set_arg2                   ; sets r13b to a correct arg2 value, either of a register or a memory address
-    sub r13b, [r14 + 6]             ; subtract value of C register, now r13b contains correct value
-
+    ; sub r13b, [r14 + 6]             ; subtract value of C register, now r13b contains correct value
+    add r13b, byte [r14 + 6]
     cmp r15b, 3     
     jle .arg1_is_a_register
                                     ; arg1 is a memory address
     call set_arg_1_to_memory_address ; rsi + r9 is a correct address to write onto
     
-    mov al, 0
-    mov [r14 + 6], al               ; to later set C register, old value can now be forgotten
-        
+    ; mov al, 0
+    mov [r14 + 6], byte 0               ; to later set C register, old value can now be forgotten
+    
+    ; trzeba dodac do arg2 wartosc carry
+    ; add r13b, byte [r14 + 6]
+
     sub [rsi + r9], r13b            ; main operation
-    sbb [r14 + 6], al               ; will set C register to 1 if CF is set, 0 otherwise
+    adc [r14 + 6], byte 0           ; will set C register to 1 if CF is set, 0 otherwise
 
     mov al, [rsi + r9]              ; to set Z
     call set_Z_register
@@ -534,40 +539,15 @@ RCR:
     ret
 
 
-; r14 + 4 to PC
-; czy PC + r13b > 255?
 JMP:
                                 ; since instruction is known, r12 can be overwritten
     
     mov r15b, [r14 + 4]         ; save old PC value
-    mov r13b, bl        ; get jump value
+    mov r13b, bl                ; get jump value
                                 ; if PC = 13 and jump_value = -7 so actually 249
                                 ; then PC = 262, but overflows and actually contains 6
     add [r14 + 4], r13b
-                                ; [r14 + 4] is set
-                                ; now adjust rbp
-                                ; if [r14 + 4] is now smaller than it was
-                                ; then make rbp smaller as well
-                                ; by how much?
-                                ; by 2 times new_PC - old_PC
 
-    mov r12b, [r14 + 4]         ; r12b is the new_PC
-                                ; if new > old, then add new - old
-                                ;               else add old - new
-    cmp r15b, r12b
-    jl .new_PC_is_bigger
-                                ; new PC is smaller, diff is old - new
-    
-
-    sub r15b, r12b              ; difference: old - new        
-    movzx r15, r15b             ; move to 64-bit register
-    jmp decode_and_perform_instruction.finish
-    
-.new_PC_is_bigger:
-                                ; r12b > r15b
-    sub r12b, r15b              ; difference: new - old
-    mov r15b, r12b              ; move to 64-bit register
-    movzx r15, r15b
     jmp decode_and_perform_instruction.finish
 
 JZ:
@@ -653,13 +633,13 @@ decode_and_perform_instruction:
 
 .jump_instruction:
     cmp [rbp], word 0xC500  ; compare with minimal value of JZ instruction
-    jge JZ
+    jnb JZ
     cmp [rbp], word 0xC400  ; compare with minimal value of JNZ instruction
-    jge JNZ
+    jnb JNZ
     cmp [rbp], word 0xC300  ; compare with minimal value of JC instruction
-    jge JC
+    jnb JC
     cmp [rbp], word 0xC200  ; compare with minimal value of JNC instruction
-    jge JNC
+    jnb JNC
                                         ; it's a jump instruction, bute none of the above
                                         ; so it must be simply a JMP instruction
     jmp JMP
@@ -693,7 +673,7 @@ so_emul:
 
     dec rdx
     cmp rdx, 0
-    jg .instructions_loop
+    ja .instructions_loop
 
 .finish:
 
