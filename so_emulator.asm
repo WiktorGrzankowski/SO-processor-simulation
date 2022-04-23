@@ -6,36 +6,34 @@ global so_emul
 
 section .bss
 
+; [rbp] - current instruction
+; r10b - arg1
+; r11b - arg2
+; bl - imm8
+
 state:          resq CORES
-arg1:           resb CORES
-arg2:           resb CORES
-imm8:           resb CORES
-; instruction:    resw CORES
 
 section .text
 
+; todo - wywalić arg1, zastąpić wszędzie rejestrem r10
 
 decode_parameters:
-    ; tu nalezy przesuwac samo [rdi], zeby moc krokowo wykonywac instrukcje
-
-    ; [rbp] będzie się równać efektywnie [rdi + PC]
+                        ; [rbp] will mean effectively [rdi + PC], that is the current instruction
     mov bpl, [r14 + 4]  ; rbp = PC
     dec bpl             ; becasue we increment it earlier for the next instruction
     movzx rbp, bpl
-    shl rbp, 1         ; rbp = 2 * PC
+    shl rbp, 1          ; rbp = 2 * PC
     add rbp, rdi        ; rbp = rdi + 2 * PC
 
     mov r13w, word [rbp]
 
-    
-    ; mov [rel instruction], r13w ; save instruction value
-    mov [rel imm8], r13b
+    mov bl, r13b
     shr r13w, 3
     shr r13b, 5
-    mov [rel arg1], r13b
+    mov r10b, r13b
     shr r13w, 3
     shr r13b, 5
-    mov [rel arg2], r13b
+    mov r11b, r13b
     ret
 
 
@@ -61,10 +59,8 @@ set_arg2_to_memory_address:
 
     add r13b, [r14 + 1]     ; add D, sum is X + D
     
-    ; zmiany!
     movzx r9, r13b          ; r9 is now an address, rsi + r9 means [X + D]
     mov r13b, [rsi + r9]
-    ; zmiany
     jmp .finish
 .check_for_7:
     cmp r13b, 7
@@ -78,8 +74,6 @@ set_arg2_to_memory_address:
 
 set_arg2_to_register_value:
     movzx r9, r13b          ; get arg2 value as 64-bits
-    ; debug
-
     mov r13b, [r14 + r9]    ; set value of arg2 with correct register
     ret
 
@@ -135,8 +129,8 @@ set_Z_register:
     ret
 
 OR:
-    mov r15b, [rel arg1]
-    mov r13b, [rel arg2]
+    mov r15b, r10b
+    mov r13b, r11b
     call set_arg2 ; sets r13b to a correct arg2 value
     cmp r15b, 3
     jle .arg1_is_a_register
@@ -150,8 +144,6 @@ OR:
 
 .arg1_is_a_register:
     movzx r15, r15b
-    ;debug
-    ; add r15, r11
     or [r14 + r15], r13b
     ; set Z register
     mov al, [r14 + r15]
@@ -162,8 +154,8 @@ OR:
 ; Jeśli arg1 wskazuje na pamięć, a arg2 jest rejestrem, to instrukcja jest atomowa.
 ; Jeśli arg2 wskazuje na pamięć, to instrukcja nie jest atomowa.
 XCHG:
-    mov r15b, [rel arg1]
-    mov r13b, [rel arg2]
+    mov r15b, r10b
+    mov r13b, r11b
     ; czy arg2 jest rejestrem?
     cmp r13b, 3                 ; check if arg2 is a register
     jle .may_be_atomic_arg2_reg
@@ -187,9 +179,6 @@ XCHG:
 .is_not_atomic_arg1_reg_arg2_reg:
                                     ; swap([r14 + r15], [r14 + r13])
     movzx r15, r15b
-    ; debug
-    ; add r15, r11
-    ; add r13, r11
     movzx r13, r13b
                                     ; instruction is known, r12 can be overwritten
     mov r12b, byte [r14 + r15]
@@ -202,8 +191,6 @@ XCHG:
 .is_not_atomic_arg1_reg_arg2_mem:
     movzx r15, r15b                 ; [r14 + r15] is arg1 value, a register
                                     ; now make [rsi + r9] be a value of arg2
-    ; debug
-    ; add r15, r11
     call set_arg2_to_memory_address
                                     ; swap([r14 + r15], [rsi + r9])
                                     ; r12 and r13 can now be overwritten
@@ -235,8 +222,6 @@ XCHG:
     movzx r13, r13b
                                     ; [r14 + r13] is arg2's value in register
                                     ; r12 can now be overwritten
-    ; debug
-    ; add r13, r11
     mov r12b, [r14 + r13]           ; arg2 value 
 
     call set_arg_1_to_memory_address
@@ -246,8 +231,8 @@ XCHG:
     jmp decode_and_perform_instruction.finish
 
 ADD:
-    mov r15b, [rel arg1]
-    mov r13b, [rel arg2]
+    mov r15b, r10b
+    mov r13b, r11b
     
     call set_arg2                   ; sets r13b to a correct arg2 value, either of a register or a memory address
     cmp r15b, 3     
@@ -261,8 +246,6 @@ ADD:
 
 .arg1_is_a_register:
     movzx r15, r15b
-    ; debug
-    ; add r15, r11
     add [r14 + r15], r13b
     mov al, [r14 + r15]
     call set_Z_register
@@ -272,8 +255,8 @@ ADD:
 ; można albo zrobić arg2 += CF, potem arg1 += arg2
 ; ale to chyba nie ma znaczenia 
 ADC:
-    mov r15b, [rel arg1]
-    mov r13b, [rel arg2]
+    mov r15b, r10b
+    mov r13b, r11b
     
     call set_arg2                   ; sets r13b to a correct arg2 value, either of a register or a memory address
     add r13b, [r14 + 6]             ; add potentially the carry flag
@@ -294,8 +277,6 @@ ADC:
 
 .arg1_is_a_register:
     movzx r15, r15b
-    ; debug
-    ; add r15, r11
 
     mov al, 0           ; to later set C register
     mov [r14 + 6], al   ; to later set C register, old value can now be forgotten
@@ -310,8 +291,8 @@ ADC:
 
 
 SUB:
-    mov r15b, [rel arg1]
-    mov r13b, [rel arg2]
+    mov r15b, r10b
+    mov r13b, r11b
     
     call set_arg2                   ; sets r13b to a correct arg2 value, either of a register or a memory address
     cmp r15b, 3     
@@ -325,7 +306,6 @@ SUB:
 
 .arg1_is_a_register:
     movzx r15, r15b
-    ; add r15, r11
     sub [r14 + r15], r13b
     mov al, [r14 + r15]
     call set_Z_register
@@ -333,8 +313,8 @@ SUB:
 
 ; chyba dziala w porzadku, analogicznie do ADC
 SBB:
-    mov r15b, [rel arg1]
-    mov r13b, [rel arg2]
+    mov r15b, r10b
+    mov r13b, r11b
     
     call set_arg2                   ; sets r13b to a correct arg2 value, either of a register or a memory address
     sub r13b, [r14 + 6]             ; subtract value of C register, now r13b contains correct value
@@ -356,8 +336,6 @@ SBB:
 
 .arg1_is_a_register:
     movzx r15, r15b
-    ; debug
-    ; add r15, r11
 
     mov al, 0               ; to later set C register
     mov [r14 + 6], al       ; to later set C register, old value can now be forgotten
@@ -371,8 +349,8 @@ SBB:
 
 
 MOV:
-    mov r15b, [rel arg1]
-    mov r13b, [rel arg2]
+    mov r15b, r10b
+    mov r13b, r11b
     
     call set_arg2
     cmp r15b, 3
@@ -383,15 +361,13 @@ MOV:
     jmp decode_and_perform_instruction.finish
 .arg1_is_a_register:
     movzx r15, r15b
-    ; debug
-    ; add r15, r11
     mov [r14 + r15], r13b
     jmp decode_and_perform_instruction.finish
 
 ; arg1 += imm8 
 MOVI:
-    mov r15b, [rel arg1]
-    mov r13b, [rel imm8] ; r13b is an immediate
+    mov r15b, r10b
+    mov r13b, bl ; r13b is an immediate
 
     cmp r15b, 3
     jle .arg1_is_a_register
@@ -401,7 +377,6 @@ MOVI:
 
 .arg1_is_a_register:
     movzx r15, r15b
-    ; add r15, r11
     mov [r14 + r15], r13b
     jmp decode_and_perform_instruction.finish
 
@@ -421,8 +396,8 @@ STC:
 
 ; do przetestowania jeszcze
 XORI:
-    mov r15b, [rel arg1]
-    mov r13b, [rel imm8] ; r13b is an immediate
+    mov r15b, r10b
+    mov r13b, bl ; r13b is an immediate
 
     cmp r15b, 3
     jle .arg1_is_a_register
@@ -436,7 +411,6 @@ XORI:
 
 .arg1_is_a_register:
     movzx r15, r15b
-    ; add r15, r11
     xor [r14 + r15], r13b
     mov al, [r14 + r15]
 
@@ -444,8 +418,8 @@ XORI:
     jmp decode_and_perform_instruction.finish
 
 ADDI:
-    mov r15b, [rel arg1]
-    mov r13b, [rel imm8]    ; r13b is an immediate
+    mov r15b, r10b
+    mov r13b, bl    ; r13b is an immediate
 
     cmp r15b, 3
     jle .arg1_is_a_register
@@ -458,7 +432,6 @@ ADDI:
 
 .arg1_is_a_register:
     movzx r15, r15b
-    ; add r15, r11
     add [r14 + r15], r13b   ; add imm8 to given memory address
     mov al, [r14 + r15]     ; to set Z register
     call set_Z_register
@@ -466,8 +439,8 @@ ADDI:
 
 ; Odejmuje wartość imm8 od arg1, ale nie zapisuje wyniku. Ustawia znaczniki C i Z zgodnie z wynikiem operacji.
 CMPI:
-    mov r15b, [rel arg1]
-    mov r13b, [rel imm8]    ; r13b is an immediate
+    mov r15b, r10b
+    mov r13b, bl    ; r13b is an immediate
 
     cmp r15b, 3
     jle .arg1_is_a_register
@@ -482,8 +455,6 @@ CMPI:
 
 .arg1_is_a_register:
     movzx r15, r15b
-    ; add r15, r11
-    ; cmp arg1, imm8
     mov [r14 + 7], byte 0   ; Z register's value will be now set to 1 if comparison resultet in 0
     mov [r14 + 6], byte 0   ; C register can now be forgotten and will be set now
     cmp [r14 + r15], r13b
@@ -496,11 +467,9 @@ CMPI:
 
     jmp decode_and_perform_instruction.finish
 
-; todo
-; kod 0x7001 + 0x100 * arg1
-; Rotuje zawartość arg o jeden bit w prawo poprzez znacznik C. Nie modyfikuje znacznika Z.
+
 RCR:
-    mov r15b, [rel arg1]        ; arg1 is the value that will be rotated alongside C register
+    mov r15b, r10b        ; arg1 is the value that will be rotated alongside C register
     cmp r15b, 3
     jle .arg1_is_a_register
     call set_arg_1_to_memory_address
@@ -536,8 +505,6 @@ RCR:
 
 .arg1_is_a_register:
     movzx r15, r15b
-    ; debug
-    ; add r15, r11
     xor r13b, r13b              ; r13b = 0
     cmp [r14 + 6], byte 1       ; check if C register is set
     jne .CF_done_arg1_is_a_register
@@ -573,7 +540,7 @@ JMP:
                                 ; since instruction is known, r12 can be overwritten
     
     mov r15b, [r14 + 4]         ; save old PC value
-    mov r13b, [rel imm8]        ; get jump value
+    mov r13b, bl        ; get jump value
                                 ; if PC = 13 and jump_value = -7 so actually 249
                                 ; then PC = 262, but overflows and actually contains 6
     add [r14 + 4], r13b
@@ -635,12 +602,9 @@ JNC:
 
 decode_and_perform_instruction:
     mov r12w, word [rbp]
-    ; mov r12w, [rdi + rbp]
 
     shr r12w, 14
 
-
-    ; tu jeszcze nie ma ustawionego Z    
     cmp word r12w, 0
     jne .other_instruction              ; instruction does not use arg1 and arg2
 .classic_instruction:
@@ -660,30 +624,12 @@ decode_and_perform_instruction:
     cmp r12b, 8                         
     je XCHG
 
-    ; mov r12b, [rel instruction]         ; look at the first byte to check instruction
-    
-    ; cmp r12b, 4
-    ; je ADD
-    ; cmp r12b, 5
-    ; je SUB
-    ; cmp r12b, 0
-    ; je MOV
-    ; cmp r12b, 2
-    ; je OR
-    ; cmp r12b, 6
-    ; je ADC
-    ; cmp r12b, 7
-    ; je SBB
-    ; cmp r12b, 8                         
-    ; je XCHG
-
     jmp .finish                         ; incorrect instruction
 
 .other_instruction:
 
 
     mov r12w, word [rbp]
-    ; mov r12w, [rel instruction]
     shr r12w, 12                    
     cmp r12w, 4
     je MOVI
@@ -691,33 +637,28 @@ decode_and_perform_instruction:
     je BRK
     cmp r12w, 5
     je XORI
-    cmp r12b, 7
+    cmp r12w, 7
     je RCR
-    cmp r12b, 6                         
+    cmp r12w, 6                         
     je .ADDI_OR_CMPI
-    cmp r12b, 8
+    cmp r12w, 8
     je .CLC_OR_STC
-    cmp r12b, 12
+    cmp r12w, 12
     je .jump_instruction
 
 .ADDI_OR_CMPI:
     cmp [rbp], word 0x6800
-    ; cmp [rel instruction], word 0x6800
     jl ADDI                             ; instruction value is below 0x6800, so it must be ADDI
     jmp CMPI
                                         ; instruction is 0x6XXX and is greater or equal to 0x6800, must be CMPI
 .CLC_OR_STC:
     cmp [rbp], word 0x8000
-    ; cmp [rel instruction], word 0x8000
     je CLC                              ; instruction is CLC    
     jmp STC                             ; instruction is 0x8XXX and is not 0x8000, so it must be STC
 
 .jump_instruction:
-    
-    ; tu jeszcze nie ma ustawionego dubugu
     cmp [rbp], word 0xC500  ; compare with minimal value of JZ instruction
     jge JZ
-    ; tu jeszcze nie ma ustawionego Z
     cmp [rbp], word 0xC400  ; compare with minimal value of JNZ instruction
     jge JNZ
     cmp [rbp], word 0xC300  ; compare with minimal value of JC instruction
@@ -742,15 +683,12 @@ so_emul:
     push r14
     push r15
     push rbp
+    push rbx
     ; here begins the main loop
     ; we can modify rdx, so that will be the main loop iterator
-    ; mov rcx, 1
-    mov r11, rcx
-    ; shl rcx, 3
-    shl r11, 3              ; r11 = rcx * 8, to refer correctly to r14 as rcx-th core
 
     lea r14, [rel state]
-    lea r14, [r14 + r11]
+    lea r14, [r14 + rcx * 8]
     ; mov r14, state
     xor r8, r8
     cmp rdx, 0
@@ -768,6 +706,7 @@ so_emul:
 .finish:
 
     mov rax, [r14]
+    pop rbx
     pop rbp
     pop r15
     pop r14
