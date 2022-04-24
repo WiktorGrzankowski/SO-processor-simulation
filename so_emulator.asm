@@ -118,9 +118,11 @@ set_arg_1_to_memory_address:
     movzx r9, r15b                      ; r9 is now an address, rsi + r9 means [Y + D]
     ret
 
+
 ; modifies al and [r14 + 7]
 ; sets Z register according to al, which is a value of latest operation
 set_Z_register:
+    mov al, [r12]
     cmp al, 0
     jne .ZF_is_not_zero
     inc al                              ; al = 1
@@ -131,12 +133,46 @@ set_Z_register:
     mov [r14 + 7], al
     ret
 
+
+; modifies r12
+; after this function is called, r12 points to arg1's value
+; meaning [r12] is either a value in memory, or value of a register
+get_pointer_to_arg1:
+    cmp r15b, 3                         ; czy arg1 to rejestr
+    jle .arg1_is_a_register
+    
+    call set_arg_1_to_memory_address
+    mov r12, rsi
+    add r12, r9
+                                        ; [r12] = [rsi + r9]
+    ret
+.arg1_is_a_register:
+    movzx r15, r15b
+    mov r12, r14
+    add r12, r15
+                                        ; [r12] = [r14 + r15]
+    ret
+
+
 ; modifies r15 and r13
+; sets r13b as arg2's value
+; calls get_pointer_to_arg1 to make [r12] be arg1's value
 prepare_arg1_arg2:
     mov r15b, r10b
     mov r13b, r11b
     call set_arg2                       ; sets r13b to a correct arg2 value
+    call get_pointer_to_arg1
     ret
+
+
+; modifies r15 and r13
+; sets r13b as imm8's value
+; calls get_pointer_to_arg1 to make [r12] be arg1's value
+prepare_arg1_imm8:
+    mov r15b, r10b
+    mov r13b, bl                        ; r13b is an immediate
+    call get_pointer_to_arg1
+    ret  
 
 
 ; modifies r15, r13, rax, [rsi + r9] and [r14 + r15]
@@ -145,19 +181,7 @@ prepare_arg1_arg2:
 ; sets Z register
 OR:
     call prepare_arg1_arg2
-    cmp r15b, 3
-    jle .arg1_is_a_register
-                                        ; arg1 is a memory address
-    call set_arg_1_to_memory_address
-    or [rsi + r9], r13b
-    mov al, [rsi + r9]                  ; to set Z register
-    call set_Z_register
-    jmp decode_and_perform_instruction.finish
-
-.arg1_is_a_register:
-    movzx r15, r15b
-    or [r14 + r15], r13b
-    mov al, [r14 + r15]                 ; to set Z register
+    or byte [r12], r13b
     call set_Z_register
     jmp decode_and_perform_instruction.finish
 
@@ -242,7 +266,7 @@ XCHG:
     xchg byte [rsi + r9], r12b
     mov byte [r14 + r13], r12b          ; [r14 + r13] := [rsi + r9]
     jmp decode_and_perform_instruction.finish
-
+    
 
 ; modifies r15, r13, rax, [rsi + r9] and [r14 + r15]
 ; if arg1 is a memory address, then [rsi + r9] += r13b
@@ -250,19 +274,7 @@ XCHG:
 ; sets Z register
 ADD:
     call prepare_arg1_arg2
-    cmp r15b, 3     
-    jle .arg1_is_a_register
-                                        ; arg1 is a memory address
-    call set_arg_1_to_memory_address
-                                        ; rsi + r9 is a correct address to write onto
-    add [rsi + r9], r13b
-    mov al, [rsi + r9]
-    call set_Z_register
-    jmp decode_and_perform_instruction.finish
-.arg1_is_a_register:
-    movzx r15, r15b
-    add [r14 + r15], r13b
-    mov al, [r14 + r15]
+    add byte [r12], r13b
     call set_Z_register
     jmp decode_and_perform_instruction.finish
 
@@ -272,54 +284,22 @@ ADD:
 ; if arg1 is a register, then the result is [r14 + r15] += (r13b + [r14 + 6])
 ; sets C and Z registers
 ADC:
-    call prepare_arg1_arg2
     mov al, [r14 + 6]                   ; get C value
     mov [r14 + 6], byte 0               ; reset C register
+    call prepare_arg1_arg2
 
-    cmp r15b, 3     
-    jle .arg1_is_a_register
-                                        ; arg1 is a memory address
-    call set_arg_1_to_memory_address 
-                                        ; rsi + r9 is a correct address to write onto
-    add [rsi + r9], r13b
+    add [r12], r13b
     adc [r14 + 6], byte 0               ; if CF is set, set C register               
-    add [rsi + r9], al                  ; add C value
+    add [r12], al                       ; add C value
     adc [r14 + 6], byte 0               ; if CF is set, set C register.
     
-    mov al, [rsi + r9]                  ; to set Z 
-    call set_Z_register
-    jmp decode_and_perform_instruction.finish
-.arg1_is_a_register:
-    movzx r15, r15b
-    add [r14 + r15], r13b
-    adc [r14 + 6], byte 0               ; if CF is set, set C register
-    add [r14 + r15], al
-    adc [r14 + 6], byte 0               ; if CF is set, set C register
-
-    mov al, [r14 + r15]                 ; to set Z
     call set_Z_register
     jmp decode_and_perform_instruction.finish
 
 
-; modifies r15, r13, [rsi + r9], [r14 + r15] and rax
-; if arg1 is a memory address, then the result is [rsi + r9] -= r13b
-; if arg1 is a register, then the result is [r14 + r15] -= r13b
-; sets Z register
 SUB:
-    call prepare_arg1_arg2   
-    cmp r15b, 3     
-    jle .arg1_is_a_register
-                                        ; arg1 is a memory address
-    call set_arg_1_to_memory_address 
-                                        ; rsi + r9 is a correct address to write onto
-    sub [rsi + r9], r13b
-    mov al, [rsi + r9]                  ; to set Z
-    call set_Z_register
-    jmp decode_and_perform_instruction.finish
-.arg1_is_a_register:
-    movzx r15, r15b
-    sub [r14 + r15], r13b
-    mov al, [r14 + r15]                 ; to set Z
+    call prepare_arg1_arg2
+    sub byte [r12], r13b
     call set_Z_register
     jmp decode_and_perform_instruction.finish
 
@@ -329,31 +309,14 @@ SUB:
 ; if arg1 is a register, then the result is [r14 + r15] -= (r13b + [r14 + 6])
 ; sets C and Z registers
 SBB:
-    call prepare_arg1_arg2
     mov al, [r14 + 6]                   ; save C value
     mov [r14 + 6], byte 0               ; reset C register
-
-    cmp r15b, 3     
-    jle .arg1_is_a_register
-                                        ; arg1 is a memory address
-    call set_arg_1_to_memory_address
-                                        ; rsi + r9 is a correct address to write onto
-    sub [rsi + r9], r13b            
+    call prepare_arg1_arg2
+    sub [r12], r13b            
     adc [r14 + 6], byte 0               ; if CF is set, set C register
-    sub [rsi + r9], al
+    sub [r12], al
     adc [r14 + 6], byte 0               ; if CF is set, set C register
 
-    mov al, [rsi + r9]                  ; to set Z
-    call set_Z_register
-    jmp decode_and_perform_instruction.finish
-.arg1_is_a_register:
-    movzx r15, r15b
-    sub [r14 + r15], r13b
-    adc [r14 + 6], byte 0               ; if CF is set, set C register
-    sub [r14 + r15], al
-    adc [r14 + 6], byte 0               ; if CF is set, set C register
-
-    mov al, [r14 + r15]                 ; to set Z
     call set_Z_register
     jmp decode_and_perform_instruction.finish
 
@@ -362,16 +325,8 @@ SBB:
 ; if arg1 is a memory address, then the result is [rsi + r9] = r13b
 ; if arg1 is a register, then the result is [r14 + r15] = r13b
 MOV:
-    call prepare_arg1_arg2
-    cmp r15b, 3
-    jle .arg1_is_a_register
-
-    call set_arg_1_to_memory_address
-    mov [rsi + r9], r13b
-    jmp decode_and_perform_instruction.finish
-.arg1_is_a_register:
-    movzx r15, r15b
-    mov [r14 + r15], r13b
+    call prepare_arg1_arg2              
+    mov byte [r12], r13b
     jmp decode_and_perform_instruction.finish
 
 
@@ -380,18 +335,8 @@ MOV:
 ; if arg1 is a register, then the result is [r14 + r15] = r13b
 ; where r13b is an immediate
 MOVI:
-    mov r15b, r10b
-    mov r13b, bl                        ; r13b is an immediate
-
-    cmp r15b, 3
-    jle .arg1_is_a_register
-
-    call set_arg_1_to_memory_address
-    mov [rsi + r9], r13b
-    jmp decode_and_perform_instruction.finish
-.arg1_is_a_register:
-    movzx r15, r15b
-    mov [r14 + r15], r13b
+    call prepare_arg1_imm8
+    mov [r12], r13b
     jmp decode_and_perform_instruction.finish
 
 
@@ -422,21 +367,8 @@ STC:
 ; where r13b is an immediate
 ; modifies Z register
 XORI:
-    mov r15b, r10b
-    mov r13b, bl                        ; r13b is an immediate
-
-    cmp r15b, 3
-    jle .arg1_is_a_register
-
-    call set_arg_1_to_memory_address
-    xor [rsi + r9], r13b
-    mov al, [rsi + r9]                  ; to set Z register
-    call set_Z_register
-    jmp decode_and_perform_instruction.finish
-.arg1_is_a_register:
-    movzx r15, r15b
-    xor [r14 + r15], r13b
-    mov al, [r14 + r15]                 ; to set Z register
+    call prepare_arg1_imm8
+    xor [r12], r13b
     call set_Z_register
     jmp decode_and_perform_instruction.finish
 
@@ -447,21 +379,8 @@ XORI:
 ; where r13b is an immediate
 ; modifies Z register
 ADDI:
-    mov r15b, r10b
-    mov r13b, bl                        ; r13b is an immediate
-
-    cmp r15b, 3
-    jle .arg1_is_a_register
-                                        ; arg1 is a memory address
-    call set_arg_1_to_memory_address
-    add [rsi + r9], r13b                ; add imm8 to given memory address
-    mov al, [rsi + r9]                  ; to set Z register
-    call set_Z_register
-    jmp decode_and_perform_instruction.finish
-.arg1_is_a_register:
-    movzx r15, r15b
-    add [r14 + r15], r13b               ; add imm8 to given register
-    mov al, [r14 + r15]                 ; to set Z register
+    call prepare_arg1_imm8
+    add [r12], r13b
     call set_Z_register
     jmp decode_and_perform_instruction.finish
 
@@ -471,27 +390,13 @@ ADDI:
 ; if arg1 is a register, then the result is cmp [r14 + r15], r13b
 ; modifies C and Z registers
 CMPI:
-    mov r15b, r10b
-    mov r13b, bl                        ; r13b is an immediate
-
-    cmp r15b, 3
-    jle .arg1_is_a_register
-                                        ; arg1 is a memory address
-    call set_arg_1_to_memory_address
     mov [r14 + 7], byte 0               ; Z register's value will be now set to 1 if comparison resulted in 0
     mov [r14 + 6], byte 0               ; C register can now be forgotten and will be set now
+    call prepare_arg1_imm8
 
-    cmp [rsi + r9], r13b
+    cmp [r12], r13b
     jnz .set_C
     inc byte [r14 + 7]                  ; will set Z to 1 if ZF is set, stay 0 otherwise
-.arg1_is_a_register:
-    movzx r15, r15b
-    mov [r14 + 7], byte 0               ; Z register's value will be now set to 1 if comparison resultet in 0
-    mov [r14 + 6], byte 0               ; C register can now be forgotten and will be set now
-    cmp [r14 + r15], r13b
-    jnz .set_C
-                                        ; result is 0, set Z register
-    inc byte [r14 + 7]                  ; set Z to 1
 .set_C:
                                         ; Z is set already, now set C correctly 
     adc [r14 + 6], byte 0               ; will set C to 1 if CF is set, stay 0 otherwise
@@ -556,6 +461,7 @@ RCR:
                                         ; r14 + r15 is a register correctly rotated with CF
     setc [r14 + 6]                      ; set C register if CF is set after rcr instruction
     ret
+
 
 ; modifies r15, r13 and [r14 + 4]
 ; makes an unconditional jump
