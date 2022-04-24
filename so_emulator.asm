@@ -101,27 +101,26 @@ set_arg_1_to_memory_address:
     jne .check_for_5
     mov r15b, [r14 + 2]                 ; get X from state
     movzx r9, r15b                      ; r9 is now an address, rsi + r9 means [X]
-    jmp .finish
+    ret
 .check_for_5:
     cmp r15b, 5                         ; 5 means access Y
     jne .check_for_6
     mov r15b, [r14 + 3]                 ; get Y from state
     movzx r9, r15b                      ; r9 is now an address, rsi + r9 means [Y]
-    jmp .finish
+    ret
 .check_for_6:
     cmp r15b, 6                         ; 6 means access X + D
     jne .check_for_7
     mov r15b, [r14 + 2]                 ; get X from state
     add r15b, [r14 + 1]                 ; add D, sum is X + D
     movzx r9, r15b                      ; r9 is now an address, rsi + r9 means [X + D]
-    jmp .finish
+    ret
 .check_for_7:
                                         ; 7 means access Y + D
     mov r15b, [r14 + 3]                 ; get Y from state
     add r15b, [r14 + 1]                 ; add D, sum is Y + D
     movzx r9, r15b                      ; r9 is now an address, rsi + r9 means [Y + D]
-.finish:
-    ret  
+    ret
 
 ; modifies al and [r14 + 7]
 ; sets Z register according to al, which is a value of latest operation
@@ -136,14 +135,20 @@ set_Z_register:
     mov [r14 + 7], al
     ret
 
+; modifies r15 and r13
+prepare_arg1_arg2:
+    mov r15b, r10b
+    mov r13b, r11b
+    call set_arg2                       ; sets r13b to a correct arg2 value
+    ret
+
+
 ; modifies r15, r13, rax, [rsi + r9] and [r14 + r15]
 ; if arg1 is a memory address, then the result is or [rsi + r9], r13b
 ; if arg1 is a register, then the result is or [r14 + r15], r13b
 ; sets Z register
 OR:
-    mov r15b, r10b
-    mov r13b, r11b
-    call set_arg2                       ; sets r13b to a correct arg2 value
+    call prepare_arg1_arg2
     cmp r15b, 3
     jle .arg1_is_a_register
                                         ; arg1 is a memory address
@@ -248,10 +253,7 @@ XCHG:
 ; if arg1 is a register, then [r14 + r15] += r13b
 ; sets Z register
 ADD:
-    mov r15b, r10b
-    mov r13b, r11b
-    
-    call set_arg2                       ; sets r13b to a correct arg2 value, either of a register or a memory address
+    call prepare_arg1_arg2
     cmp r15b, 3     
     jle .arg1_is_a_register
                                         ; arg1 is a memory address
@@ -274,10 +276,7 @@ ADD:
 ; if arg1 is a register, then the result is [r14 + r15] += (r13b + [r14 + 6])
 ; sets C and Z registers
 ADC:
-    mov r15b, r10b
-    mov r13b, r11b
-    
-    call set_arg2                       ; sets r13b to a correct arg2 value
+    call prepare_arg1_arg2
     mov al, [r14 + 6]                   ; get C value
     mov [r14 + 6], byte 0               ; reset C register
 
@@ -311,10 +310,7 @@ ADC:
 ; if arg1 is a register, then the result is [r14 + r15] -= r13b
 ; sets Z register
 SUB:
-    mov r15b, r10b
-    mov r13b, r11b
-    
-    call set_arg2                   
+    call prepare_arg1_arg2   
     cmp r15b, 3     
     jle .arg1_is_a_register
                                         ; arg1 is a memory address
@@ -337,10 +333,7 @@ SUB:
 ; if arg1 is a register, then the result is [r14 + r15] -= (r13b + [r14 + 6])
 ; sets C and Z registers
 SBB:
-    mov r15b, r10b
-    mov r13b, r11b
-    
-    call set_arg2        
+    call prepare_arg1_arg2
     mov al, [r14 + 6]                   ; save C value
     mov [r14 + 6], byte 0               ; reset C register
 
@@ -373,10 +366,7 @@ SBB:
 ; if arg1 is a memory address, then the result is [rsi + r9] = r13b
 ; if arg1 is a register, then the result is [r14 + r15] = r13b
 MOV:
-    mov r15b, r10b
-    mov r13b, r11b
-    
-    call set_arg2
+    call prepare_arg1_arg2
     cmp r15b, 3
     jle .arg1_is_a_register
 
