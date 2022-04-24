@@ -20,22 +20,22 @@ section .text
 ; if current instruction doesn't use some or any of these arguments
 ; they simply won't be looked at
 decode_parameters:
-                                ; [rbp] will mean effectively [rdi + PC], that is the current instruction
-    mov bpl, [r14 + 4]          ; rbp = PC
-    dec bpl                     ; becasue we increment it earlier for the next instruction
+                                        ; [rbp] will mean effectively [rdi + PC], the current instruction
+    mov bpl, [r14 + 4]                  ; rbp = PC
+    dec bpl                             ; becasue we increment it earlier for the next instruction
     movzx rbp, bpl
-    shl rbp, 1                  ; rbp = 2 * PC
-    add rbp, rdi                ; rbp = rdi + 2 * PC
+    shl rbp, 1                          ; rbp = 2 * PC
+    add rbp, rdi                        ; rbp = rdi + 2 * PC
 
-    mov r13w, word [rbp]        ; get entire instruction value
+    mov r13w, word [rbp]                ; get entire instruction value
 
-    mov bl, r13b                ; save imm8 value
-    shr r13w, 3                 ; move bitwise to obtain correct bytes to decode
+    mov bl, r13b                        ; save imm8 value
+    shr r13w, 3                         ; move bitwise to obtain correct bytes to decode
     shr r13b, 5
-    mov r10b, r13b              ; save arg1 value
+    mov r10b, r13b                      ; save arg1 value
     shr r13w, 3
     shr r13b, 5
-    mov r11b, r13b              ; save arg2 value
+    mov r11b, r13b                      ; save arg2 value
     ret
 
 
@@ -43,33 +43,33 @@ decode_parameters:
 ; sets r13b as value of memory address pointed by arg2
 ; [r14 + r9] is also the value in memory
 set_arg2_to_memory_address:
-    cmp r13b, 4                     ; 4 means access X
+    cmp r13b, 4                         ; 4 means access X
     jne .check_for_5
-    mov r13b, [r14 + 2]             ; get X from state
-    movzx r9, r13b                  ; r9 is now an address, rsi + r9 means [X]
-    mov r13b, [rsi + r9]            ; save value under r13b
+    mov r13b, [r14 + 2]                 ; get X from state
+    movzx r9, r13b                      ; r9 is now an address, rsi + r9 means [X]
+    mov r13b, [rsi + r9]                ; save value under r13b
     jmp .finish
 .check_for_5:
-    cmp r13b, 5                     ; 5 means access Y
+    cmp r13b, 5                         ; 5 means access Y
     jne .check_for_6
-    mov r13b, [r14 + 3]             ; get Y from state
-    movzx r9, r13b                  ; r9 is now an address, rsi + r9 means [Y]
-    mov r13b, [rsi + r9]            ; save value under r13b
+    mov r13b, [r14 + 3]                 ; get Y from state
+    movzx r9, r13b                      ; r9 is now an address, rsi + r9 means [Y]
+    mov r13b, [rsi + r9]                ; save value under r13b
     jmp .finish
 .check_for_6:
-    cmp r13b, 6                     ; 6 means access X + D
+    cmp r13b, 6                         ; 6 means access X + D
     jne .check_for_7
-    mov r13b, [r14 + 2]             ; get X from state
-    add r13b, [r14 + 1]             ; add D, sum is X + D
-    movzx r9, r13b                  ; r9 is now an address, rsi + r9 means [X + D]
-    mov r13b, [rsi + r9]            ; save value under r13b
+    mov r13b, [r14 + 2]                 ; get X from state
+    add r13b, [r14 + 1]                 ; add D, sum is X + D
+    movzx r9, r13b                      ; r9 is now an address, rsi + r9 means [X + D]
+    mov r13b, [rsi + r9]                ; save value under r13b
     jmp .finish
 .check_for_7:
-                                    ; 7 means access Y + D
-    mov r13b, [r14 + 3]             ; get Y from state
-    add r13b, [r14 + 1]             ; add D, sum is Y + D
-    movzx r9, r13b                  ; r9 is now an address, rsi + r9 means [Y + D]
-    mov r13b, [rsi + r9]            ; save value under r13b
+                                        ; 7 means access Y + D
+    mov r13b, [r14 + 3]                 ; get Y from state
+    add r13b, [r14 + 1]                 ; add D, sum is Y + D
+    movzx r9, r13b                      ; r9 is now an address, rsi + r9 means [Y + D]
+    mov r13b, [rsi + r9]                ; save value under r13b
 .finish:
     ret
 
@@ -77,49 +77,49 @@ set_arg2_to_memory_address:
 ; sets r13b as value pointed to by arg2
 ; [r14 + r9] is now a value of register specified by arg2
 set_arg2_to_register_value:
-    movzx r9, r13b                  ; get arg2 value as 64-bits
-    mov r13b, [r14 + r9]            ; set value of arg2 with correct register
+    movzx r9, r13b                      ; get arg2 value as 64-bits
+    mov r13b, [r14 + r9]                ; set value of arg2 with correct register
     ret
 
 
 ; calls correct function to set r11b according to arg2, 
 ; either as a register or a memory address
 set_arg2:
-    cmp r13b, 3                     ; check arg2
-    jle .arg2_is_a_register         ; arg2 is a register 
-    call set_arg2_to_memory_address ; arg2 is a memory address, set r13b accordingly
+    cmp r13b, 3                         ; check arg2
+    jle .arg2_is_a_register             ; arg2 is a register 
+    call set_arg2_to_memory_address     ; arg2 is a memory address, set r13b accordingly
     ret
 .arg2_is_a_register:
-    call set_arg2_to_register_value ; arg2 is a register
+    call set_arg2_to_register_value     ; arg2 is a register
     ret
 
 
 ; modifies r15 and r9
 ; sets [rsi + r9] as correct value that decoded arg2 points to
 set_arg_1_to_memory_address:
-    cmp r15b, 4                     ; 4 means access X
+    cmp r15b, 4                         ; 4 means access X
     jne .check_for_5
-    mov r15b, [r14 + 2]             ; get X from state
-    movzx r9, r15b                  ; r9 is now an address, rsi + r9 means [X]
+    mov r15b, [r14 + 2]                 ; get X from state
+    movzx r9, r15b                      ; r9 is now an address, rsi + r9 means [X]
     jmp .finish
 .check_for_5:
-    cmp r15b, 5                     ; 5 means access Y
+    cmp r15b, 5                         ; 5 means access Y
     jne .check_for_6
-    mov r15b, [r14 + 3]             ; get Y from state
-    movzx r9, r15b                  ; r9 is now an address, rsi + r9 means [Y]
+    mov r15b, [r14 + 3]                 ; get Y from state
+    movzx r9, r15b                      ; r9 is now an address, rsi + r9 means [Y]
     jmp .finish
 .check_for_6:
-    cmp r15b, 6                     ; 6 means access X + D
+    cmp r15b, 6                         ; 6 means access X + D
     jne .check_for_7
-    mov r15b, [r14 + 2]             ; get X from state
-    add r15b, [r14 + 1]             ; add D, sum is X + D
-    movzx r9, r15b                  ; r9 is now an address, rsi + r9 means [X + D]
+    mov r15b, [r14 + 2]                 ; get X from state
+    add r15b, [r14 + 1]                 ; add D, sum is X + D
+    movzx r9, r15b                      ; r9 is now an address, rsi + r9 means [X + D]
     jmp .finish
 .check_for_7:
-                                    ; 7 means access Y + D
-    mov r15b, [r14 + 3]             ; get Y from state
-    add r15b, [r14 + 1]             ; add D, sum is Y + D
-    movzx r9, r15b                  ; r9 is now an address, rsi + r9 means [Y + D]
+                                        ; 7 means access Y + D
+    mov r15b, [r14 + 3]                 ; get Y from state
+    add r15b, [r14 + 1]                 ; add D, sum is Y + D
+    movzx r9, r15b                      ; r9 is now an address, rsi + r9 means [Y + D]
 .finish:
     ret  
 
@@ -128,7 +128,7 @@ set_arg_1_to_memory_address:
 set_Z_register:
     cmp al, 0
     jne .ZF_is_not_zero
-    inc al                          ; al = 1
+    inc al                              ; al = 1
     mov [r14 + 7], al
     ret
 .ZF_is_not_zero:
@@ -143,20 +143,20 @@ set_Z_register:
 OR:
     mov r15b, r10b
     mov r13b, r11b
-    call set_arg2                   ; sets r13b to a correct arg2 value
+    call set_arg2                       ; sets r13b to a correct arg2 value
     cmp r15b, 3
     jle .arg1_is_a_register
-                                    ; arg1 is a memory address
+                                        ; arg1 is a memory address
     call set_arg_1_to_memory_address
     or [rsi + r9], r13b
-    mov al, [rsi + r9]              ; to set Z register
+    mov al, [rsi + r9]                  ; to set Z register
     call set_Z_register
     jmp decode_and_perform_instruction.finish
 
 .arg1_is_a_register:
     movzx r15, r15b
     or [r14 + r15], r13b
-    mov al, [r14 + r15]             ; to set Z register
+    mov al, [r14 + r15]                 ; to set Z register
     call set_Z_register
     jmp decode_and_perform_instruction.finish
 
@@ -170,76 +170,76 @@ XCHG:
     mov r15b, r10b
     mov r13b, r11b
 
-    cmp r13b, 3                     ; check if arg2 is a register
+    cmp r13b, 3                         ; check if arg2 is a register
     jle .may_be_atomic_arg2_reg
-                                    ; arg2 is a memory address
+                                        ; arg2 is a memory address
 .cant_be_atomic_arg2_mem:
-    cmp r15b, 3                     ; check if arg1 is a register
+    cmp r15b, 3                         ; check if arg1 is a register
     ja .is_not_atomic_arg1_mem_arg2_mem
-                                    ; arg1 is a register
-                                    ; arg2 is a memory address
+                                        ; arg1 is a register
+                                        ; arg2 is a memory address
     jmp .is_not_atomic_arg1_reg_arg2_mem
 
 
 .may_be_atomic_arg2_reg:
-                                    ; now check if arg1 is a memory address
-    cmp r15b, 3                     ; check if arg1 is a memory address
-    ja .is_atomic_arg1_mem_arg2_reg ; is > 3, so it's a memory address
+                                        ; now check if arg1 is a memory address
+    cmp r15b, 3                         ; check if arg1 is a memory address
+    ja .is_atomic_arg1_mem_arg2_reg     ; is > 3, so it's a memory address
     
-                                    ; arg1 is a register
-                                    ; arg2 is a register
-                                    ; xchg is not atomic
+                                        ; arg1 is a register
+                                        ; arg2 is a register
+                                        ; xchg is not atomic
 .is_not_atomic_arg1_reg_arg2_reg:
-                                    ; swap([r14 + r15], [r14 + r13])
+                                        ; swap([r14 + r15], [r14 + r13])
     movzx r15, r15b
     movzx r13, r13b
-                                    ; instruction is known, r12 can be overwritten
+                                        ; instruction is known, r12 can be overwritten
     mov r12b, byte [r14 + r15]
-                                    ; r9 is not used, can be overwritten
+                                        ; r9 is not used, can be overwritten
     mov r9b, byte [r14 + r13]
     mov byte [r14 + r15], r9b
     mov byte [r14 + r13], r12b
     jmp decode_and_perform_instruction.finish
 
 .is_not_atomic_arg1_reg_arg2_mem:
-    movzx r15, r15b                 ; [r14 + r15] is arg1 value, a register
-                                    ; now make [rsi + r9] be a value of arg2
+    movzx r15, r15b                     ; [r14 + r15] is arg1 value, a register
+                                        ; now make [rsi + r9] be a value of arg2
     call set_arg2_to_memory_address
-                                    ; swap([r14 + r15], [rsi + r9])
-                                    ; r12 and r13 can now be overwritten
-                                    ; as instructions and parameters are set
+                                        ; swap([r14 + r15], [rsi + r9])
+                                        ; r12 and r13 can now be overwritten
+                                        ; as instructions and parameters are set
     mov r12b, byte [r14 + r15]
-                                    ; r13b already contains value of [rsi + r9]
-                                    ; from set_arg2_to_memory_address
+                                        ; r13b already contains value of [rsi + r9]
+                                        ; from set_arg2_to_memory_address
     mov byte [r14 + r15], r13b
     mov byte [rsi + r9], r12b
     jmp decode_and_perform_instruction.finish
 .is_not_atomic_arg1_mem_arg2_mem:
     call set_arg_1_to_memory_address
-                                    ; [rsi + r9] points to correct arg1 address
-    mov r12, r9                     ; set r12 as address in memory array
-                                    ; now [rsi + r12] points to arg1 address             
-                                    ; now make [rsi + r9] point to arg2 address
-    call set_arg2_to_memory_address ; [rsi + r9] points to arg2 address
-                                    ; swap([rsi + r9], [rsi + r12])
-                                    ; r13 and r15 can now be overwritten
-                                    ; as instructions and parameters are set
+                                        ; [rsi + r9] points to correct arg1 address
+    mov r12, r9                         ; set r12 as address in memory array
+                                        ; now [rsi + r12] points to arg1 address             
+                                        ; now make [rsi + r9] point to arg2 address
+    call set_arg2_to_memory_address     ; [rsi + r9] points to arg2 address
+                                        ; swap([rsi + r9], [rsi + r12])
+                                        ; r13 and r15 can now be overwritten
+                                        ; as instructions and parameters are set
     mov r15b, byte [rsi + r12]
-                                    ; r13b already contains value of [rsi + r9]
-                                    ; from set_arg2_to_memory_address
+                                        ; r13b already contains value of [rsi + r9]
+                                        ; from set_arg2_to_memory_address
     mov byte [rsi + r12], r13b
     mov byte [rsi + r9], r15b
     jmp decode_and_perform_instruction.finish
 .is_atomic_arg1_mem_arg2_reg:
     movzx r13, r13b
-                                    ; [r14 + r13] is arg2's value in register
-                                    ; r12 can now be overwritten
-    mov r12b, [r14 + r13]           ; arg2 value 
+                                        ; [r14 + r13] is arg2's value in register
+                                        ; r12 can now be overwritten
+    mov r12b, [r14 + r13]               ; arg2 value 
 
     call set_arg_1_to_memory_address
-                                    ; [rsi + r9] is arg1's memory address value
+                                        ; [rsi + r9] is arg1's memory address value
     xchg byte [rsi + r9], r12b
-    mov byte [r14 + r13], r12b      ; [r14 + r13] := [rsi + r9]
+    mov byte [r14 + r13], r12b          ; [r14 + r13] := [rsi + r9]
     jmp decode_and_perform_instruction.finish
 
 
@@ -251,12 +251,12 @@ ADD:
     mov r15b, r10b
     mov r13b, r11b
     
-    call set_arg2                   ; sets r13b to a correct arg2 value, either of a register or a memory address
+    call set_arg2                       ; sets r13b to a correct arg2 value, either of a register or a memory address
     cmp r15b, 3     
     jle .arg1_is_a_register
-                                    ; arg1 is a memory address
+                                        ; arg1 is a memory address
     call set_arg_1_to_memory_address
-                                    ; rsi + r9 is a correct address to write onto
+                                        ; rsi + r9 is a correct address to write onto
     add [rsi + r9], r13b
     mov al, [rsi + r9]
     call set_Z_register
@@ -277,31 +277,31 @@ ADC:
     mov r15b, r10b
     mov r13b, r11b
     
-    call set_arg2                   ; sets r13b to a correct arg2 value, either of a register or a memory address
-    mov al, [r14 + 6]               ; get C value
-    mov [r14 + 6], byte 0           ; reset C register
+    call set_arg2                       ; sets r13b to a correct arg2 value
+    mov al, [r14 + 6]                   ; get C value
+    mov [r14 + 6], byte 0               ; reset C register
 
     cmp r15b, 3     
     jle .arg1_is_a_register
-                                    ; arg1 is a memory address
+                                        ; arg1 is a memory address
     call set_arg_1_to_memory_address 
-                                    ; rsi + r9 is a correct address to write onto
+                                        ; rsi + r9 is a correct address to write onto
     add [rsi + r9], r13b
-    adc [r14 + 6], byte 0           ; if CF is set, set C register               
-    add [rsi + r9], al              ; add C value
-    adc [r14 + 6], byte 0           ; if CF is set, set C register.
+    adc [r14 + 6], byte 0               ; if CF is set, set C register               
+    add [rsi + r9], al                  ; add C value
+    adc [r14 + 6], byte 0               ; if CF is set, set C register.
     
-    mov al, [rsi + r9]              ; to set Z 
+    mov al, [rsi + r9]                  ; to set Z 
     call set_Z_register
     jmp decode_and_perform_instruction.finish
 .arg1_is_a_register:
     movzx r15, r15b
     add [r14 + r15], r13b
-    adc [r14 + 6], byte 0           ; if CF is set, set C register
+    adc [r14 + 6], byte 0               ; if CF is set, set C register
     add [r14 + r15], al
-    adc [r14 + 6], byte 0           ; if CF is set, set C register
+    adc [r14 + 6], byte 0               ; if CF is set, set C register
 
-    mov al, [r14 + r15]             ; to set Z
+    mov al, [r14 + r15]                 ; to set Z
     call set_Z_register
     jmp decode_and_perform_instruction.finish
 
@@ -317,17 +317,17 @@ SUB:
     call set_arg2                   
     cmp r15b, 3     
     jle .arg1_is_a_register
-                                    ; arg1 is a memory address
+                                        ; arg1 is a memory address
     call set_arg_1_to_memory_address 
-                                    ; rsi + r9 is a correct address to write onto
+                                        ; rsi + r9 is a correct address to write onto
     sub [rsi + r9], r13b
-    mov al, [rsi + r9]              ; to set Z
+    mov al, [rsi + r9]                  ; to set Z
     call set_Z_register
     jmp decode_and_perform_instruction.finish
 .arg1_is_a_register:
     movzx r15, r15b
     sub [r14 + r15], r13b
-    mov al, [r14 + r15]             ; to set Z
+    mov al, [r14 + r15]                 ; to set Z
     call set_Z_register
     jmp decode_and_perform_instruction.finish
 
@@ -341,30 +341,30 @@ SBB:
     mov r13b, r11b
     
     call set_arg2        
-    mov al, [r14 + 6]               ; save C value
-    mov [r14 + 6], byte 0           ; reset C register
+    mov al, [r14 + 6]                   ; save C value
+    mov [r14 + 6], byte 0               ; reset C register
 
     cmp r15b, 3     
     jle .arg1_is_a_register
-                                    ; arg1 is a memory address
+                                        ; arg1 is a memory address
     call set_arg_1_to_memory_address
-                                    ; rsi + r9 is a correct address to write onto
+                                        ; rsi + r9 is a correct address to write onto
     sub [rsi + r9], r13b            
-    adc [r14 + 6], byte 0           ; if CF is set, set C register
+    adc [r14 + 6], byte 0               ; if CF is set, set C register
     sub [rsi + r9], al
-    adc [r14 + 6], byte 0           ; if CF is set, set C register
+    adc [r14 + 6], byte 0               ; if CF is set, set C register
 
-    mov al, [rsi + r9]              ; to set Z
+    mov al, [rsi + r9]                  ; to set Z
     call set_Z_register
     jmp decode_and_perform_instruction.finish
 .arg1_is_a_register:
     movzx r15, r15b
     sub [r14 + r15], r13b
-    adc [r14 + 6], byte 0           ; if CF is set, set C register
+    adc [r14 + 6], byte 0               ; if CF is set, set C register
     sub [r14 + r15], al
-    adc [r14 + 6], byte 0           ; if CF is set, set C register
+    adc [r14 + 6], byte 0               ; if CF is set, set C register
 
-    mov al, [r14 + r15]             ; to set Z
+    mov al, [r14 + r15]                 ; to set Z
     call set_Z_register
     jmp decode_and_perform_instruction.finish
 
@@ -395,7 +395,7 @@ MOV:
 ; where r13b is an immediate
 MOVI:
     mov r15b, r10b
-    mov r13b, bl                    ; r13b is an immediate
+    mov r13b, bl                        ; r13b is an immediate
 
     cmp r15b, 3
     jle .arg1_is_a_register
@@ -437,20 +437,20 @@ STC:
 ; modifies Z register
 XORI:
     mov r15b, r10b
-    mov r13b, bl                    ; r13b is an immediate
+    mov r13b, bl                        ; r13b is an immediate
 
     cmp r15b, 3
     jle .arg1_is_a_register
 
     call set_arg_1_to_memory_address
     xor [rsi + r9], r13b
-    mov al, [rsi + r9]              ; to set Z register
+    mov al, [rsi + r9]                  ; to set Z register
     call set_Z_register
     jmp decode_and_perform_instruction.finish
 .arg1_is_a_register:
     movzx r15, r15b
     xor [r14 + r15], r13b
-    mov al, [r14 + r15]             ; to set Z register
+    mov al, [r14 + r15]                 ; to set Z register
     call set_Z_register
     jmp decode_and_perform_instruction.finish
 
@@ -694,9 +694,9 @@ so_emul:
     push r15
     push rbp
     push rbx
-
+    shl rcx, 3
     lea r14, [rel state]                ; get the state variable
-    lea r14, [r14 + rcx * 8]            ; get this core's state
+    lea r14, [r14 + rcx]                ; get this core's state
     cmp rdx, 0                          ; check if 'steps' count is 0
     je .finish                          ; finish if there are no instructions to perform
 .instructions_loop:
