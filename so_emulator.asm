@@ -1,9 +1,5 @@
 global so_emul
 
-%ifndef CORES
-%define CORES 4
-%endif
-
 section .bss
 
 ; [rbp] - current instruction
