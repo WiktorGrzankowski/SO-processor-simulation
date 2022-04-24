@@ -17,7 +17,7 @@ section .text
 ; they simply won't be looked at
 decode_parameters:
                                         ; [rbp] will mean effectively [rdi + PC], the current instruction
-    mov bpl, [r14 + 4]                  ; rbp = PC
+    mov bpl, byte [r14 + 4]             ; rbp = PC
     dec bpl                             ; becasue we increment it earlier for the next instruction
     movzx rbp, bpl
     shl rbp, 1                          ; rbp = 2 * PC
@@ -41,31 +41,31 @@ decode_parameters:
 set_arg2_to_memory_address:
     cmp r13b, 4                         ; 4 means access X
     jne .check_for_5
-    mov r13b, [r14 + 2]                 ; get X from state
+    mov r13b, byte [r14 + 2]            ; get X from state
     movzx r9, r13b                      ; r9 is now an address, rsi + r9 means [X]
-    mov r13b, [rsi + r9]                ; save value under r13b
+    mov r13b, byte [rsi + r9]           ; save value under r13b
     jmp .finish
 .check_for_5:
     cmp r13b, 5                         ; 5 means access Y
     jne .check_for_6
-    mov r13b, [r14 + 3]                 ; get Y from state
+    mov r13b, byte [r14 + 3]            ; get Y from state
     movzx r9, r13b                      ; r9 is now an address, rsi + r9 means [Y]
-    mov r13b, [rsi + r9]                ; save value under r13b
+    mov r13b, byte [rsi + r9]           ; save value under r13b
     jmp .finish
 .check_for_6:
     cmp r13b, 6                         ; 6 means access X + D
     jne .check_for_7
-    mov r13b, [r14 + 2]                 ; get X from state
-    add r13b, [r14 + 1]                 ; add D, sum is X + D
+    mov r13b, byte [r14 + 2]            ; get X from state
+    add r13b, byte [r14 + 1]            ; add D, sum is X + D
     movzx r9, r13b                      ; r9 is now an address, rsi + r9 means [X + D]
-    mov r13b, [rsi + r9]                ; save value under r13b
+    mov r13b, byte [rsi + r9]           ; save value under r13b
     jmp .finish
 .check_for_7:
                                         ; 7 means access Y + D
-    mov r13b, [r14 + 3]                 ; get Y from state
-    add r13b, [r14 + 1]                 ; add D, sum is Y + D
+    mov r13b, byte [r14 + 3]            ; get Y from state
+    add r13b, byte [r14 + 1]            ; add D, sum is Y + D
     movzx r9, r13b                      ; r9 is now an address, rsi + r9 means [Y + D]
-    mov r13b, [rsi + r9]                ; save value under r13b
+    mov r13b, byte [rsi + r9]           ; save value under r13b
 .finish:
     ret
 
@@ -74,7 +74,7 @@ set_arg2_to_memory_address:
 ; [r14 + r9] is now a value of register specified by arg2
 set_arg2_to_register_value:
     movzx r9, r13b                      ; get arg2 value as 64-bits
-    mov r13b, [r14 + r9]                ; set value of arg2 with correct register
+    mov r13b, byte [r14 + r9]           ; set value of arg2 with correct register
     ret
 
 
@@ -95,26 +95,26 @@ set_arg2:
 set_arg_1_to_memory_address:
     cmp r15b, 4                         ; 4 means access X
     jne .check_for_5
-    mov r15b, [r14 + 2]                 ; get X from state
+    mov r15b, byte [r14 + 2]            ; get X from state
     movzx r9, r15b                      ; r9 is now an address, rsi + r9 means [X]
     ret
 .check_for_5:
     cmp r15b, 5                         ; 5 means access Y
     jne .check_for_6
-    mov r15b, [r14 + 3]                 ; get Y from state
+    mov r15b, byte [r14 + 3]             ; get Y from state
     movzx r9, r15b                      ; r9 is now an address, rsi + r9 means [Y]
     ret
 .check_for_6:
     cmp r15b, 6                         ; 6 means access X + D
     jne .check_for_7
-    mov r15b, [r14 + 2]                 ; get X from state
-    add r15b, [r14 + 1]                 ; add D, sum is X + D
+    mov r15b, byte [r14 + 2]            ; get X from state
+    add r15b, byte [r14 + 1]            ; add D, sum is X + D
     movzx r9, r15b                      ; r9 is now an address, rsi + r9 means [X + D]
     ret
 .check_for_7:
                                         ; 7 means access Y + D
-    mov r15b, [r14 + 3]                 ; get Y from state
-    add r15b, [r14 + 1]                 ; add D, sum is Y + D
+    mov r15b, byte [r14 + 3]            ; get Y from state
+    add r15b, byte [r14 + 1]            ; add D, sum is Y + D
     movzx r9, r15b                      ; r9 is now an address, rsi + r9 means [Y + D]
     ret
 
@@ -122,15 +122,15 @@ set_arg_1_to_memory_address:
 ; modifies al and [r14 + 7]
 ; sets Z register according to al, which is a value of latest operation
 set_Z_register:
-    mov al, [r12]
+    mov al, byte [r12]
     cmp al, 0
     jne .ZF_is_not_zero
     inc al                              ; al = 1
-    mov [r14 + 7], al
+    mov byte [r14 + 7], al
     ret
 .ZF_is_not_zero:
     mov al, 0
-    mov [r14 + 7], al
+    mov byte [r14 + 7], al
     ret
 
 
@@ -282,14 +282,14 @@ ADD:
 ; [r12] += (r13b + C)
 ; sets C and Z registers
 ADC:
-    mov al, [r14 + 6]                   ; get C value
-    mov [r14 + 6], byte 0               ; reset C register
+    mov al, byte [r14 + 6]              ; get C value
+    mov byte [r14 + 6], 0               ; reset C register
     call prepare_arg1_arg2
 
-    add [r12], r13b
-    adc [r14 + 6], byte 0               ; if CF is set, set C register               
-    add [r12], al                       ; add C value
-    adc [r14 + 6], byte 0               ; if CF is set, set C register.
+    add byte [r12], r13b
+    adc byte [r14 + 6], 0               ; if CF is set, set C register               
+    add byte [r12], al                  ; add C value
+    adc byte [r14 + 6], 0               ; if CF is set, set C register.
     
     call set_Z_register
     jmp decode_and_perform_instruction.finish
@@ -306,13 +306,13 @@ SUB:
 ; [r12] -= (r13b + [r14 + 6])
 ; sets C and Z registers
 SBB:
-    mov al, [r14 + 6]                   ; save C value
-    mov [r14 + 6], byte 0               ; reset C register
+    mov al, byte [r14 + 6]              ; save C value
+    mov byte [r14 + 6], 0               ; reset C register
     call prepare_arg1_arg2
-    sub [r12], r13b            
-    adc [r14 + 6], byte 0               ; if CF is set, set C register
-    sub [r12], al
-    adc [r14 + 6], byte 0               ; if CF is set, set C register
+    sub byte [r12], r13b            
+    adc byte [r14 + 6], 0               ; if CF is set, set C register
+    sub byte [r12], al
+    adc byte [r14 + 6], 0               ; if CF is set, set C register
 
     call set_Z_register
     jmp decode_and_perform_instruction.finish
@@ -331,7 +331,7 @@ MOV:
 ; where r13b is an immediate
 MOVI:
     call prepare_arg1_imm8
-    mov [r12], r13b
+    mov byte [r12], r13b
     jmp decode_and_perform_instruction.finish
 
 
@@ -345,14 +345,14 @@ BRK:
 ; modifies [r14 + 6]
 ; sets C register to 0
 CLC: 
-    mov [r14 + 6], byte 0
+    mov byte [r14 + 6], 0
     jmp decode_and_perform_instruction.finish
 
 
 ; modifies [r14 + 6]
 ; sets C register to 1
 STC:
-    mov [r14 + 6], byte 1
+    mov byte [r14 + 6], 1
     jmp decode_and_perform_instruction.finish
 
 
@@ -362,7 +362,7 @@ STC:
 ; modifies Z register
 XORI:
     call prepare_arg1_imm8
-    xor [r12], r13b
+    xor byte [r12], r13b
     call set_Z_register
     jmp decode_and_perform_instruction.finish
 
@@ -373,7 +373,7 @@ XORI:
 ; modifies Z register
 ADDI:
     call prepare_arg1_imm8
-    add [r12], r13b
+    add byte [r12], r13b
     call set_Z_register
     jmp decode_and_perform_instruction.finish
 
@@ -382,11 +382,11 @@ ADDI:
 ; cmp [r12], r13b
 ; modifies C and Z registers
 CMPI:
-    mov [r14 + 7], byte 0               ; Z register's value will be now set to 1 if comparison resulted in 0
-    mov [r14 + 6], byte 0               ; C register can now be forgotten and will be set now
+    mov byte [r14 + 7], 0               ; Z register's value will be now set to 1 if comparison resulted in 0
+    mov byte [r14 + 6], 0               ; C register can now be forgotten and will be set now
     call prepare_arg1_imm8
 
-    cmp [r12], r13b
+    cmp byte [r12], r13b
     jnz .set_C
     inc byte [r14 + 7]                  ; will set Z to 1 if ZF is set, stay 0 otherwise
 .set_C:
@@ -403,11 +403,11 @@ RCR:
     call get_pointer_to_arg1
                                         ; r12 points to arg1's value
     xor r13b, r13b
-    cmp [r14 + 6], byte 1               ; check if C register is set
+    cmp byte [r14 + 6], 1               ; check if C register is set
     jne .C_register_remembered
     inc r13b                            ; r13b remembers C register's value
 .C_register_remembered:
-    mov [r14 + 6], byte 0               ; old value of C register can be forgotten
+    mov byte [r14 + 6], 0               ; old value of C register can be forgotten
     cmp r13b, 1
     je .set_CF
     clc                                 ; C wasn't set, clear CF
@@ -416,7 +416,7 @@ RCR:
     stc                                 ; CF set <=> (C is set)
 .finish:
     rcr byte [r12], 1                   ; rotate with CF equal to C register
-    setc [r14 + 6]                      ; set C register if CF is set after rotation
+    setc byte [r14 + 6]                 ; set C register if CF is set after rotation
     ret
 
 
@@ -426,17 +426,17 @@ RCR:
 ; where r13b is an immediate 
 JMP:
                                         ; since instruction is known, r12 can be overwritten  
-    mov r15b, [r14 + 4]                 ; save old PC value
+    mov r15b, byte [r14 + 4]            ; save old PC value
     mov r13b, bl                        ; get jump value
                                         ; if PC = 13 and jump_value = -7 so actually 249
                                         ; then PC = 262, but overflows and actually contains 6
-    add [r14 + 4], r13b
+    add byte [r14 + 4], r13b
     jmp decode_and_perform_instruction.finish
 
 
 ; makes a conditional jump if Z register is set to 1
 JZ:
-    cmp [r14 + 7], byte 1
+    cmp byte [r14 + 7], 1
     jne decode_and_perform_instruction.finish
                                         ; Z is set
     jmp JMP
@@ -444,14 +444,14 @@ JZ:
 
 ; makes a conditional jump if Z register is set to 0
 JNZ:
-    cmp [r14 + 7], byte 0
+    cmp byte [r14 + 7], 0
     jne decode_and_perform_instruction.finish
                                         ; Z is not set
     jmp JMP           
 
 ; makes a conditional jump if C register is set to 1
 JC:
-    cmp [r14 + 6], byte 1
+    cmp byte [r14 + 6], 1
     jne decode_and_perform_instruction.finish
                                         ; C is set
     jmp JMP
@@ -459,7 +459,7 @@ JC:
 
 ; makes a conditional jump if C register is set to 0
 JNC:
-    cmp [r14 + 6], byte 0
+    cmp byte [r14 + 6], 0
     jne decode_and_perform_instruction.finish
                                         ; C is not set
     jmp JMP
@@ -508,21 +508,21 @@ decode_and_perform_instruction:
     je .jump_instruction
     jmp .finish                         ; incorrect instruction
 .ADDI_OR_CMPI:
-    cmp [rbp], word 0x6800
+    cmp word [rbp], 0x6800
     jl ADDI                             ; instruction value is below 0x6800, so it must be ADDI
     jmp CMPI                            ; instruction is 0x6XXX and is greater or equal to 0x6800, must be CMPI
 .CLC_OR_STC:
-    cmp [rbp], word 0x8000
+    cmp word [rbp],  0x8000
     je CLC                              ; instruction is CLC    
     jmp STC                             ; instruction is 0x8XXX and is not 0x8000, so it must be STC
 .jump_instruction:
-    cmp [rbp], word 0xC500              ; compare with minimal value of JZ instruction
+    cmp word [rbp], 0xC500              ; compare with minimal value of JZ instruction
     jnb JZ
-    cmp [rbp], word 0xC400              ; compare with minimal value of JNZ instruction
+    cmp word [rbp], 0xC400              ; compare with minimal value of JNZ instruction
     jnb JNZ
-    cmp [rbp], word 0xC300              ; compare with minimal value of JC instruction
+    cmp word [rbp], 0xC300              ; compare with minimal value of JC instruction
     jnb JC
-    cmp [rbp], word 0xC200              ; compare with minimal value of JNC instruction
+    cmp word [rbp], 0xC200              ; compare with minimal value of JNC instruction
     jnb JNC
                                         ; it's a jump instruction, bute none of the above
                                         ; so it must be simply a JMP instruction
@@ -556,7 +556,7 @@ so_emul:
     cmp rdx, 0
     ja .instructions_loop
 .finish:
-    mov rax, [r14]                      ; return this core's state
+    mov rax, qword [r14]                      ; return this core's state
     pop rbx
     pop rbp
     pop r15
