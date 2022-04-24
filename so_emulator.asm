@@ -82,7 +82,7 @@ set_arg2_to_register_value:
 ; either as a register or a memory address
 set_arg2:
     cmp r13b, 3                         ; check arg2
-    jle .arg2_is_a_register             ; arg2 is a register 
+    jbe .arg2_is_a_register             ; arg2 is a register 
     call set_arg2_to_memory_address     ; arg2 is a memory address, set r13b accordingly
     ret
 .arg2_is_a_register:
@@ -139,7 +139,7 @@ set_Z_register:
 ; meaning [r12] is either a value in memory, or value of a register
 get_pointer_to_arg1:
     cmp r15b, 3                         ; czy arg1 to rejestr
-    jle .arg1_is_a_register
+    jbe .arg1_is_a_register
     
     call set_arg_1_to_memory_address
     mov r12, rsi
@@ -196,7 +196,7 @@ XCHG:
     mov r13b, r11b
 
     cmp r13b, 3                         ; check if arg2 is a register
-    jle .may_be_atomic_arg2_reg
+    jbe .may_be_atomic_arg2_reg
                                         ; arg2 is a memory address
 .cant_be_atomic_arg2_mem:
     cmp r15b, 3                         ; check if arg1 is a register
@@ -410,7 +410,7 @@ CMPI:
 RCR:
     mov r15b, r10b                      ; arg1 is the value that will be rotated alongside C register
     cmp r15b, 3
-    jle .arg1_is_a_register
+    jbe .arg1_is_a_register
     call set_arg_1_to_memory_address
 
     xor r13b, r13b                      ; r13b = 0
