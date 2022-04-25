@@ -7,7 +7,7 @@ section .bss
 ; r11b - arg2
 ; bl - imm8
 
-state:          resq CORES
+state:          resq CORES              ; 8 bytes for each core, 1 byte for each register + 1 unused
 
 section .text
 
@@ -65,15 +65,7 @@ set_arg2_to_memory_address:
 
 
 ; modifies r9 and r13
-; sets r13b as value pointed to by arg2
-; [r14 + r9] is now a value of register specified by arg2
-set_arg2_to_register_value:
-    movzx r9, r13b                      ; get arg2 value as 64-bits
-    mov r13b, byte [r14 + r9]           ; set value of arg2 with correct register
-    ret
-
-
-; calls correct function to set r11b according to arg2, 
+; sets r11b according to arg2, 
 ; either as a register or a memory address
 set_arg2:
     cmp r13b, 3                         ; check arg2
@@ -81,7 +73,8 @@ set_arg2:
     call set_arg2_to_memory_address     ; arg2 is a memory address, set r13b accordingly
     ret
 .arg2_is_a_register:
-    call set_arg2_to_register_value     ; arg2 is a register
+    movzx r9, r13b                      ; get arg2 value as 64-bits
+    mov r13b, byte [r14 + r9]           ; set value of arg2 with correct register
     ret
 
 
@@ -177,69 +170,32 @@ OR:
 ; otherwise it's not
 ; swaps the values of memory or registers pointed to by arg1 and arg2
 XCHG:
-    mov r15b, r10b
-    mov r13b, r11b
+    call prepare_arg1_arg2              ; [rsi] is arg1's value, r13b is arg2's value
+    cmp r11b, 3                         ; check if arg2 is a register
+    ja .not_atomic
+    cmp r10b, 3                         ; check if arg1 is memory
+    jbe .not_atomic
+                                        ; is atomic
+    mov r11, r14                        ; r11 can be overwritten
+    add r11, r9                         ; r11 points to arg2
+    xchg byte [rcx], r13b
+    mov byte [r11], r13b
+    jmp decode_and_perform_instruction.finish
+.not_atomic:
+    cmp r11b, 3
+    ja .arg2_mem 
+    mov r11, r14                        ; arg2 is reg
+    jmp .finish
+.arg2_mem:
+    mov r11, rsi                        ; arg2 is in memory
+.finish:
+    add r11, r9                         ; r11 now points to arg2
+                                        ; before add r11 was equal to rsi or r14
+    mov r10b, byte [rcx]                ; get old arg1's value
+    mov byte [rcx], r13b                ; arg1 = old arg2
+    mov byte [r11], r10b                ; arg2 = old arg1
+    jmp decode_and_perform_instruction.finish
 
-    cmp r13b, 3                         ; check if arg2 is a register
-    jbe .may_be_atomic_arg2_reg
-                                        ; arg2 is a memory address
-.cant_be_atomic_arg2_mem:
-    cmp r15b, 3                         ; check if arg1 is a register
-    ja .is_not_atomic_arg1_mem_arg2_mem
-                                        ; arg1 is a register
-                                        ; arg2 is a memory address
-    jmp .is_not_atomic_arg1_reg_arg2_mem
-.may_be_atomic_arg2_reg:
-                                        ; now check if arg1 is a memory address
-    cmp r15b, 3                         ; check if arg1 is a memory address
-    ja .is_atomic_arg1_mem_arg2_reg     ; is > 3, so it's a memory address
-.is_not_atomic_arg1_reg_arg2_reg:
-                                        ; swap([r14 + r15], [r14 + r13])
-    movzx r15, r15b
-    movzx r13, r13b
-    mov cl, byte [r14 + r15]            ; instruction is known, rcx can be overwritten
-    mov r9b, byte [r14 + r13]           ; r9 is not used, can be overwritten
-    mov byte [r14 + r15], r9b
-    mov byte [r14 + r13], cl
-    jmp decode_and_perform_instruction.finish
-.is_not_atomic_arg1_reg_arg2_mem:
-    movzx r15, r15b                     ; [r14 + r15] is arg1 value, a register
-                                        ; now make rsi + r9 be a pointer of arg2
-    call set_arg2_to_memory_address     ; r13b contains value of [rsi + r9]
-                                        ; swap([r14 + r15], [rsi + r9])
-                                        ; rcx and r13 can now be overwritten
-                                        ; as instructions and parameters are set
-    mov cl, byte [r14 + r15]
-    mov byte [r14 + r15], r13b
-    mov byte [rsi + r9], cl
-    jmp decode_and_perform_instruction.finish
-.is_not_atomic_arg1_mem_arg2_mem:
-    call set_arg_1_to_memory_address
-                                        ; [rsi + r9] points to correct arg1 address
-    mov rcx, r9                         ; set rcx as address in memory array
-                                        ; now [rsi + rcx] points to arg1 address             
-                                        ; now make [rsi + r9] point to arg2 address
-    call set_arg2_to_memory_address     ; [rsi + r9] points to arg2 address
-                                        ; swap([rsi + r9], [rsi + rcx])
-                                        ; r13 and r15 can now be overwritten
-                                        ; as instructions and parameters are set
-    mov r15b, byte [rsi + rcx]
-                                        ; r13b already contains value of [rsi + r9]
-                                        ; from set_arg2_to_memory_address
-    mov byte [rsi + rcx], r13b
-    mov byte [rsi + r9], r15b
-    jmp decode_and_perform_instruction.finish
-.is_atomic_arg1_mem_arg2_reg:
-    movzx r13, r13b
-                                        ; [r14 + r13] is arg2's value in register
-                                        ; rcx can now be overwritten
-    mov cl, [r14 + r13]                 ; arg2 value 
-    call set_arg_1_to_memory_address
-                                        ; [rsi + r9] is arg1's memory address value
-    xchg byte [rsi + r9], cl
-    mov byte [r14 + r13], cl            ; [r14 + r13] := [rsi + r9]
-    jmp decode_and_perform_instruction.finish
-    
 
 ; modifies r15, r13, rax, [[rcx]
 ; [rcx] += r13b
@@ -264,6 +220,9 @@ ADC:
     jmp set_Z_register_and_finish
 
 
+; modifies r15, r13, rax, [[rcx]
+; [rcx] -= r13b
+; sets Z register
 SUB:
     call prepare_arg1_arg2
     sub byte [rcx], r13b
@@ -508,15 +467,14 @@ so_emul:
     shl rcx, 3
     lea r14, [rel state]                ; get the state variable
     lea r14, [r14 + rcx]                ; get this core's state
-    cmp rdx, 0                          ; check if 'steps' count is 0
-    je .finish                          ; finish if there are no instructions to perform
 .instructions_loop:
+    cmp rdx, 0                          ; check if 'steps' count is 0, meaning all have been performed already
+    je .finish                          ; finish if there are no instructions to perform
     inc byte [r14 + 4]       
     call decode_parameters              
     call decode_and_perform_instruction
     dec rdx
-    cmp rdx, 0
-    ja .instructions_loop
+    jmp .instructions_loop
 .finish:
     mov rax, qword [r14]                ; return this core's state
     pop rbx
