@@ -42,32 +42,27 @@ set_arg2_to_memory_address:
     cmp r13b, 4                         ; 4 means access X
     jne .check_for_5
     mov r13b, byte [r14 + 2]            ; get X from state
-    movzx r9, r13b                      ; r9 is now an address, rsi + r9 means [X]
-    mov r13b, byte [rsi + r9]           ; save value under r13b
     jmp .finish
 .check_for_5:
     cmp r13b, 5                         ; 5 means access Y
     jne .check_for_6
     mov r13b, byte [r14 + 3]            ; get Y from state
-    movzx r9, r13b                      ; r9 is now an address, rsi + r9 means [Y]
-    mov r13b, byte [rsi + r9]           ; save value under r13b
     jmp .finish
 .check_for_6:
     cmp r13b, 6                         ; 6 means access X + D
     jne .check_for_7
     mov r13b, byte [r14 + 2]            ; get X from state
     add r13b, byte [r14 + 1]            ; add D, sum is X + D
-    movzx r9, r13b                      ; r9 is now an address, rsi + r9 means [X + D]
-    mov r13b, byte [rsi + r9]           ; save value under r13b
     jmp .finish
 .check_for_7:
                                         ; 7 means access Y + D
     mov r13b, byte [r14 + 3]            ; get Y from state
     add r13b, byte [r14 + 1]            ; add D, sum is Y + D
-    movzx r9, r13b                      ; r9 is now an address, rsi + r9 means [Y + D]
-    mov r13b, byte [rsi + r9]           ; save value under r13b
 .finish:
+    movzx r9, r13b
+    mov r13b, byte [rsi + r9]           ; save value under r13b
     ret
+
 
 ; modifies r9 and r13
 ; sets r13b as value pointed to by arg2
@@ -96,41 +91,24 @@ set_arg_1_to_memory_address:
     cmp r15b, 4                         ; 4 means access X
     jne .check_for_5
     mov r15b, byte [r14 + 2]            ; get X from state
-    movzx r9, r15b                      ; r9 is now an address, rsi + r9 means [X]
-    ret
+    jmp .finish
 .check_for_5:
     cmp r15b, 5                         ; 5 means access Y
     jne .check_for_6
     mov r15b, byte [r14 + 3]             ; get Y from state
-    movzx r9, r15b                      ; r9 is now an address, rsi + r9 means [Y]
-    ret
+    jmp .finish
 .check_for_6:
     cmp r15b, 6                         ; 6 means access X + D
     jne .check_for_7
     mov r15b, byte [r14 + 2]            ; get X from state
     add r15b, byte [r14 + 1]            ; add D, sum is X + D
-    movzx r9, r15b                      ; r9 is now an address, rsi + r9 means [X + D]
-    ret
+    jmp .finish
 .check_for_7:
                                         ; 7 means access Y + D
     mov r15b, byte [r14 + 3]            ; get Y from state
     add r15b, byte [r14 + 1]            ; add D, sum is Y + D
-    movzx r9, r15b                      ; r9 is now an address, rsi + r9 means [Y + D]
-    ret
-
-
-; modifies al and [r14 + 7]
-; sets Z register according to al, which is a value of latest operation
-set_Z_register:
-    mov al, byte [r12]
-    cmp al, 0
-    jne .ZF_is_not_zero
-    inc al                              ; al = 1
-    mov byte [r14 + 7], al
-    ret
-.ZF_is_not_zero:
-    mov al, 0
-    mov byte [r14 + 7], al
+.finish:
+    movzx r9, r15b                      ; now rsi + r9 points to arg1's value
     ret
 
 
@@ -138,7 +116,7 @@ set_Z_register:
 ; after this function is called, r12 points to arg1's value
 ; meaning [r12] is either a value in memory, or value of a register
 get_pointer_to_arg1:
-    cmp r15b, 3                         ; czy arg1 to rejestr
+    cmp r15b, 3                         ; check if arg1 means a register
     jbe .arg1_is_a_register
     
     call set_arg_1_to_memory_address
@@ -149,8 +127,7 @@ get_pointer_to_arg1:
 .arg1_is_a_register:
     movzx r15, r15b
     mov r12, r14
-    add r12, r15
-                                        ; [r12] = [r14 + r15]
+    add r12, r15                        ; [r12] = [r14 + r15]
     ret
 
 
@@ -174,6 +151,15 @@ prepare_arg1_imm8:
     call get_pointer_to_arg1
     ret  
 
+; modifies [r14 + 7]
+; sets Z register according to [r12], which is a value of latest operation
+set_Z_register_and_finish:
+    mov byte [r14 + 7], 0               ; old Z value can be forgotten
+    cmp byte [r12], 0
+    jne decode_and_perform_instruction.finish
+    mov byte [r14 + 7], 1
+    jmp decode_and_perform_instruction.finish
+
 
 ; modifies r15, r13, rax, [rsi + r9] and [r14 + r15]
 ; if arg1 is a memory address, then the result is or [rsi + r9], r13b
@@ -182,8 +168,7 @@ prepare_arg1_imm8:
 OR:
     call prepare_arg1_arg2
     or byte [r12], r13b
-    call set_Z_register
-    jmp decode_and_perform_instruction.finish
+    jmp set_Z_register_and_finish
 
 
 ; modifies r15, r13, r12, r9, [rsi] and [r14]
@@ -274,8 +259,7 @@ XCHG:
 ADD:
     call prepare_arg1_arg2
     add byte [r12], r13b
-    call set_Z_register
-    jmp decode_and_perform_instruction.finish
+    jmp set_Z_register_and_finish
 
 
 ; modifies r13, r15, rax, [r12]
@@ -285,22 +269,17 @@ ADC:
     mov al, byte [r14 + 6]              ; get C value
     mov byte [r14 + 6], 0               ; reset C register
     call prepare_arg1_arg2
-
     add byte [r12], r13b
     adc byte [r14 + 6], 0               ; if CF is set, set C register               
     add byte [r12], al                  ; add C value
     adc byte [r14 + 6], 0               ; if CF is set, set C register.
-    
-    call set_Z_register
-    jmp decode_and_perform_instruction.finish
+    jmp set_Z_register_and_finish
 
 
 SUB:
     call prepare_arg1_arg2
     sub byte [r12], r13b
-    call set_Z_register
-    jmp decode_and_perform_instruction.finish
-
+    jmp set_Z_register_and_finish
 
 ; modifies r13, r15, rax, [r12]
 ; [r12] -= (r13b + [r14 + 6])
@@ -314,8 +293,7 @@ SBB:
     sub byte [r12], al
     adc byte [r14 + 6], 0               ; if CF is set, set C register
 
-    call set_Z_register
-    jmp decode_and_perform_instruction.finish
+    jmp set_Z_register_and_finish
 
 
 ; modifies r15, r13, [r12]
@@ -363,8 +341,7 @@ STC:
 XORI:
     call prepare_arg1_imm8
     xor byte [r12], r13b
-    call set_Z_register
-    jmp decode_and_perform_instruction.finish
+    jmp set_Z_register_and_finish
 
 
 ; modifies r15, r13, [r12]
@@ -374,9 +351,7 @@ XORI:
 ADDI:
     call prepare_arg1_imm8
     add byte [r12], r13b
-    call set_Z_register
-    jmp decode_and_perform_instruction.finish
-
+    jmp set_Z_register_and_finish
 
 ; modifies r15, r13, [r12]
 ; cmp [r12], r13b
@@ -556,7 +531,7 @@ so_emul:
     cmp rdx, 0
     ja .instructions_loop
 .finish:
-    mov rax, qword [r14]                      ; return this core's state
+    mov rax, qword [r14]                ; return this core's state
     pop rbx
     pop rbp
     pop r15
