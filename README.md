@@ -187,5 +187,7 @@ gcc -pthread -o so_emulator_example so_emulator_example.o so_emulator.o
 Przykładowe uruchomienie testów:
 
 ./so_emulator
+
 ./so_emulator 61 18
+
 ./so_emulator 10240
