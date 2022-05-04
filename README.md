@@ -1,6 +1,6 @@
 # SO-processor-simulation
 
-This is my second program written in assembly for Operating Systems course at the University of Warsaw. It simulates the work of a SO processor, below is the entire content of the task (in Polish).
+This is my second program written in assembly for Operating Systems course at the University of Warsaw. It simulates the work of a SO processor, below is the entire content of the task (in Polish). so_emulator_example.c was provided by my University as a test example.
 
 Emulator procesora SO
 
